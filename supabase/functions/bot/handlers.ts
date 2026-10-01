@@ -6,7 +6,7 @@ import type { Plant, User } from "./db.ts";
 import * as C from "./claude.ts";
 import { plantnetEnabled, plantnetIdentify } from "./plantnet.ts";
 import { fetchWeather, localDate, sky, Weather } from "./weather.ts";
-import { addDays, feedDue, isOutdoor, projectWaterDays, waterStatus, WaterStatus, weatherAlerts } from "./watering.ts";
+import { addDays, feedDue, getsRain, isOutdoor, projectWaterDays, waterStatus, WaterStatus, weatherAlerts } from "./watering.ts";
 import { COMMANDS, days, ICON_KEYS, LOC_SHORT, MENU, plural, ruDate, T, waterBar, WEEK_SHORT, whenWater } from "./texts.ts";
 
 // ---------- утилиты
@@ -337,6 +337,13 @@ async function onCallback(u: User, chat: number, cb: any) {
       await answer(cb.id, "всё полито");
       return editKeyboard(chat, mid, []);
     }
+    case "rain": {
+      // rain:d из дайджеста, rain:c:<id> из карточки
+      const wet = await rainWater(u);
+      await answer(cb.id, "засчитала дождь как полив");
+      if (a === "c") return card(u, chat, arg2, mid);
+      return digestUpdateKeyboard(cb, chat, mid, data, wet.map((p) => `wd:${p.id}`));
+    }
     case "f": case "fd": {
       const p = await D.plant(uid, a);
       if (!p) return answer(cb.id);
@@ -577,6 +584,7 @@ async function card(u: User, chat: number, id: string, editMid?: number) {
     b("не сегодня", `snz:${id}`, undefined, "snooze"),
     b("инфо", `care:${id}`, undefined, "care"),
   ]);
+  if ((await D.plants(u.telegram_id)).some((x) => getsRain(x.location))) k.push([b("был дождь", `rain:c:${id}`)]);
   const nav = [b("ещё", `ed:${id}`, undefined, "edit"), b("весь сад", "list", undefined, "list")];
   if (p.photo_file_id) nav.unshift(b("фото", `pho:${id}`));
   k.push(nav);
@@ -623,9 +631,16 @@ async function careText(u: User, chat: number, id: string) {
   return sendRich(chat, rich, plain, [[b("← к растению", `p:${id}`, "primary")]]);
 }
 
-async function water(u: User, p: Plant) {
+async function water(u: User, p: Plant, kind: "water" | "rain" = "water") {
   await D.updatePlant(u.telegram_id, p.id, { last_watered_at: new Date().toISOString(), snoozed_until: null });
-  await D.logEvent(u.telegram_id, p.id, "water");
+  await D.logEvent(u.telegram_id, p.id, kind);
+}
+
+// дождь поливает всех, кто под открытым небом
+async function rainWater(u: User): Promise<Plant[]> {
+  const wet = (await D.plants(u.telegram_id)).filter((p) => getsRain(p.location));
+  for (const p of wet) await water(u, p, "rain");
+  return wet;
 }
 
 // ---------- сад: комнаты, самая срочная раскрыта
@@ -817,6 +832,7 @@ export async function digest(u: User, chat: number, manual: boolean): Promise<bo
     for (const { p } of rows) k.push([b(`полито: ${nameOf(p)}`, `wd:${p.id}`, undefined, "water")]);
   }
   if (due.length > 1) k.push([b("всё полито", "wall", "success", "water")]);
+  if (ps.some((p) => getsRain(p.location))) k.push([b("был дождь", "rain:d")]);
   for (const p of feed) k.push([b(`подкормлено: ${nameOf(p)}`, `fd:${p.id}`, undefined, "feed")]);
 
   await send(chat, out.join("\n"), k.length ? k : undefined);

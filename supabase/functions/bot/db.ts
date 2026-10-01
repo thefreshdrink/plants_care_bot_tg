@@ -114,7 +114,8 @@ export async function roomLocation(uid: number, room: string): Promise<Plant["lo
   return Object.entries(count).sort((a, b) => b[1] - a[1])[0][0] as Plant["location"];
 }
 
+// дождь, отмеченный кнопкой, в неделе тоже считается поливом
 export async function waterEvents(uid: number, sinceIso: string): Promise<{ plant_id: string; created_at: string }[]> {
-  const { data } = await db.from("events").select("plant_id, created_at").eq("user_id", uid).eq("kind", "water").gte("created_at", sinceIso);
+  const { data } = await db.from("events").select("plant_id, created_at").eq("user_id", uid).in("kind", ["water", "rain"]).gte("created_at", sinceIso);
   return data ?? [];
 }
