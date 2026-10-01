@@ -120,8 +120,10 @@ async function onMessage(u: User, chat: number, msg: any) {
     ]);
   }
 
-  // премиум-эмодзи для иконки кнопки
-  if (s.state === "await_icon" && s.data.key) {
+  // премиум-эмодзи для иконки кнопки. команда или кнопка меню выводят из этого режима.
+  const raw: string = (msg.text ?? "").trim();
+  const isCommand = raw.startsWith("/") || MENU.some((m) => m.text === raw.toLowerCase());
+  if (s.state === "await_icon" && s.data.key && !isCommand) {
     const ent = (msg.entities ?? []).find((e: any) => e.type === "custom_emoji");
     if (!ent) return send(chat, T.iconNotCustom);
     await D.setIcon(uid, s.data.key, ent.custom_emoji_id);
@@ -132,7 +134,7 @@ async function onMessage(u: User, chat: number, msg: any) {
     return iconsMenu(u, chat);
   }
 
-  let text: string = (msg.text ?? "").trim();
+  let text = raw;
   if (!text) return;
   const menuHit = MENU.find((m) => m.text === text.toLowerCase());
   if (menuHit) text = menuHit.cmd;
