@@ -49,7 +49,6 @@ export async function authorize(id: number, firstName: string): Promise<User | n
   if ((count ?? 0) === 0) {
     // первая настоящая хозяйка забирает заранее загруженную коллекцию
     await db.from("plants").update({ user_id: id }).eq("user_id", 0);
-    await db.from("wishlist").update({ user_id: id }).eq("user_id", 0);
     await db.from("events").update({ user_id: id }).eq("user_id", 0);
     await db.from("users").delete().eq("telegram_id", 0);
   }

@@ -149,7 +149,6 @@ async function onMessage(u: User, chat: number, msg: any) {
       case "/today": return digest(u, chat, true);
       case "/plants": return list(u, chat);
       case "/weather": return weatherReport(u, chat);
-      case "/wish": return wishlist(u, chat);
       case "/settings": return settings(u, chat);
     }
   }
@@ -165,13 +164,6 @@ async function onMessage(u: User, chat: number, msg: any) {
       return card(u, chat, s.data.plant_id);
     case "await_nickname":
       return askLastWatered(u, chat, { ...s.data, nickname: text.slice(0, 40) });
-    case "await_wish": {
-      const [name, ...rest] = text.split(",");
-      await D.db.from("wishlist").insert({ user_id: uid, name: name.trim(), note: rest.join(",").trim() || null });
-      await D.saveSession(uid, { state: null });
-      await send(chat, T.wishAdded(name.trim()));
-      return wishlist(u, chat);
-    }
     case "await_rename":
       await D.updatePlant(uid, s.data.plant_id, { nickname: text.slice(0, 40) });
       await D.saveSession(uid, { state: null, data: {} });
@@ -436,19 +428,6 @@ async function onCallback(u: User, chat: number, cb: any) {
       await answer(cb.id);
       return edit(chat, mid, T.deleted(p ? nameOf(p) : ""));
     }
-
-    // --- wishlist
-    case "wadd": {
-      await answer(cb.id);
-      await D.saveSession(uid, { state: "await_wish" });
-      return send(chat, T.wishAsk);
-    }
-    case "wrm": {
-      await D.db.from("wishlist").delete().eq("user_id", uid).eq("id", Number(a));
-      await answer(cb.id, "убрано");
-      return wishlist(u, chat, mid);
-    }
-
 
     // --- настройки
     case "hr": {
@@ -926,21 +905,7 @@ async function freeChat(u: User, chat: number, text: string, history: any[]) {
   return send(chat, esc(reply));
 }
 
-// ---------- wishlist и настройки
-
-async function wishlist(u: User, chat: number, editMid?: number) {
-  const { data } = await D.db.from("wishlist").select("*").eq("user_id", u.telegram_id).order("created_at");
-  const items = data ?? [];
-  if (!items.length && !editMid) {
-    await D.saveSession(u.telegram_id, { state: "await_wish" });
-    return send(chat, T.wishEmpty);
-  }
-  const text = "<b>хочу</b>\n\n" +
-    (items.map((x: any) => `${esc(x.name)}${x.note ? ` <i>${esc(x.note)}</i>` : ""}`).join("\n") || "пусто");
-  const k: Keyboard = items.map((x: any) => [b(`купила / убрать: ${x.name}`, `wrm:${x.id}`)]);
-  k.push([b("добавить", "wadd", "success")]);
-  return editMid ? edit(chat, editMid, text, k) : send(chat, text, k);
-}
+// ---------- настройки
 
 async function settings(u: User, chat: number) {
   const hours = [6, 7, 8, 9, 10, 20];

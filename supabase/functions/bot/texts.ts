@@ -50,7 +50,6 @@ export const T = {
     "/week · полив на неделю\n" +
     "/plants · мой сад\n" +
     "/weather · погода для сада\n" +
-    "/wish · список «хочу»\n" +
     "/settings · время утреннего сообщения\n" +
     "/icons · иконки на кнопках\n\n" +
     "главное всегда под рукой в меню внизу. на любой вопрос текстом отвечу, зная твои растения и прогноз.",
@@ -70,9 +69,6 @@ export const T = {
   diagnosePhoto: (n: string) => `пришли фото, где видно проблему у «${esc(n)}». можно добавить вопрос в подпись.`,
   diagnosing: "разглядываю…",
   pickPlantForDiagnosis: "у какого растения проблема?",
-  wishEmpty: "список пуст. напиши, что хочешь добавить:",
-  wishAsk: "напиши название растения (можно с заметкой через запятую):",
-  wishAdded: (n: string) => `в списке «хочу»: ${esc(n)}`,
   settings: (h: number) => `утреннее сообщение приходит в <b>${h}:00</b>. когда удобнее?`,
   settingsSaved: (h: number) => `договорились, буду писать в ${h}:00.`,
   renameAsk: "новое имя:",
@@ -128,7 +124,6 @@ export const COMMANDS: { command: string; description: string }[] = [
   { command: "week", description: "полив на неделю" },
   { command: "plants", description: "мой сад" },
   { command: "weather", description: "погода для сада" },
-  { command: "wish", description: "список «хочу»" },
   { command: "settings", description: "время утреннего сообщения" },
   { command: "icons", description: "иконки на кнопках" },
   { command: "menu", description: "показать меню внизу" },
