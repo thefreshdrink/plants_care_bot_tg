@@ -69,8 +69,9 @@ export async function plants(uid: number): Promise<Plant[]> {
   return (check(await db.from("plants").select("*").eq("user_id", uid).eq("archived", false).order("created_at")) ?? []) as Plant[];
 }
 
+// архивные не отдаём: старые кнопки в чате не должны открывать убранное растение
 export async function plant(uid: number, id: string): Promise<Plant | null> {
-  return check(await db.from("plants").select("*").eq("user_id", uid).eq("id", id).maybeSingle());
+  return check(await db.from("plants").select("*").eq("user_id", uid).eq("id", id).eq("archived", false).maybeSingle());
 }
 
 export async function updatePlant(uid: number, id: string, patch: Partial<Plant>) {

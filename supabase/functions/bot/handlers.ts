@@ -417,14 +417,15 @@ async function onCallback(u: User, chat: number, cb: any) {
     }
     case "del": {
       await answer(cb.id);
-      return edit(chat, mid, "точно убрать? история тоже удалится.", [[
+      return edit(chat, mid, "точно убрать? история сохранится.", [[
         b("да, убрать", `delok:${a}`, "danger"),
         b("нет", `p:${a}`),
       ]]);
     }
     case "delok": {
       const p = await D.plant(uid, a);
-      await D.db.from("plants").delete().eq("user_id", uid).eq("id", a);
+      // не удаляем: каскад стёр бы всю историю в events
+      await D.updatePlant(uid, a, { archived: true });
       await answer(cb.id);
       return edit(chat, mid, T.deleted(p ? nameOf(p) : ""));
     }
