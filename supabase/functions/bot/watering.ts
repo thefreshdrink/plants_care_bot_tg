@@ -23,7 +23,9 @@ export type PlantLike = {
 // интервал полива уличных растений задаётся «в таких днях».
 // зимой испаряется 1.5–2 мм в день, и тот же интервал растягивается в 3–4 раза сам.
 export const ET0_REF = 6;
-export const RAIN_RESET_MM = 5;   // дождь от 5 мм считаем поливом
+export const RAIN_RESET_MM = 3;   // дождь от 3 мм за день считаем полным поливом
+export const RAIN_MIN_MM = 1;     // от 1 до 3 мм: не обнуляет, а уменьшает накопленную сухость
+export const RAIN_FORECAST_PROB = 60; // дождь из прогноза учитываем, только если он вероятен
 export const MAX_GAP_DAYS = 40;   // для улицы не ждём дольше, даже если прохладно
 
 export const isOutdoor = (l: Location) => l !== "indoor";
@@ -38,6 +40,18 @@ export const isWarmSeason = (date: string) => {
   const m = Number(date.slice(5, 7));
   return m >= 4 && m <= 10; // апрель–октябрь
 };
+
+// один день для уличного растения: испарение добавляет сухости, дождь её снимает.
+// score меряется в эталонных днях (испарение / ET0_REF). сегодняшний дождь не считаем,
+// он ещё не прошёл: для него есть rainExpectedToday.
+function dryStep(score: number, d: Day, wet: boolean, today: string): number {
+  score += d.et0 / ET0_REF;
+  if (!wet || d.date === today) return score;
+  if (d.date > today && d.rainProb < RAIN_FORECAST_PROB) return score;
+  if (d.rain >= RAIN_RESET_MM) return 0;
+  if (d.rain >= RAIN_MIN_MM) return Math.max(0, score - d.rain / ET0_REF);
+  return score;
+}
 
 export type WaterStatus = {
   due: boolean;
@@ -69,9 +83,10 @@ export function waterStatus(p: PlantLike, w: Weather, lastWateredLocal: string):
   }
 
   // --- улица и балкон: считаем, сколько воды ушло с момента полива
+  const wet = getsRain(p.location);
   let start = lastWateredLocal;
   let rainedOn: string | null = null;
-  if (getsRain(p.location)) {
+  if (wet) {
     for (const d of w.days) {
       if (d.date > start && d.date < today && d.rain >= RAIN_RESET_MM) { start = d.date; rainedOn = d.date; }
     }
@@ -85,7 +100,7 @@ export function waterStatus(p: PlantLike, w: Weather, lastWateredLocal: string):
   for (let k = 1; k <= gap; k++) {
     const d = byDate.get(addDays(start, k));
     if (!d) { missing = true; break; }
-    score += d.et0 / ET0_REF;
+    score = dryStep(score, d, wet, today);
   }
 
   const overdue = missing || gap >= MAX_GAP_DAYS;
@@ -98,7 +113,8 @@ export function waterStatus(p: PlantLike, w: Weather, lastWateredLocal: string):
     let s = score;
     const lastEt0 = w.days.at(-1)?.et0 || ET0_REF / 2;
     for (let k = 1; k <= MAX_GAP_DAYS; k++) {
-      s += (byDate.get(addDays(today, k))?.et0 ?? lastEt0) / ET0_REF;
+      const d = byDate.get(addDays(today, k));
+      s = d ? dryStep(s, d, wet, today) : s + lastEt0 / ET0_REF;
       if (s >= interval) { daysLeft = k; break; }
       daysLeft = k;
     }
@@ -188,6 +204,7 @@ export function projectWaterDays(p: PlantLike, w: Weather, st: WaterStatus, from
   let next = addDays(today, st.due ? 0 : st.daysLeft);
   const byDate = new Map(w.days.map((d) => [d.date, d] as const));
   const lastEt0 = w.days.at(-1)?.et0 || ET0_REF / 2;
+  const wet = getsRain(p.location);
   let guard = 0;
   while (next <= to && guard++ < 60) {
     if (next >= from) out.push(next);
@@ -198,7 +215,8 @@ export function projectWaterDays(p: PlantLike, w: Weather, st: WaterStatus, from
       let s = 0, k = 0;
       while (s < p.water_every_days && k < MAX_GAP_DAYS) {
         k++;
-        s += (byDate.get(addDays(next, k))?.et0 ?? lastEt0) / ET0_REF;
+        const d = byDate.get(addDays(next, k));
+        s = d ? dryStep(s, d, wet, today) : s + lastEt0 / ET0_REF;
       }
       next = addDays(next, Math.max(1, k));
     }
