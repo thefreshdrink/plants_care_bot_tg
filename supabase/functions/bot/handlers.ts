@@ -1,13 +1,13 @@
 // вся логика диалога
 import * as tgm from "./telegram.ts";
-import { answer, b, draft, edit, editKeyboard, esc, Keyboard, mb, Preview, send, sendMenu, sendPhoto, sendRich, setIcons, syncCommands, typing } from "./telegram.ts";
+import { answer, b, draft, edit, editKeyboard, esc, Keyboard, Preview, send, sendPhoto, sendWelcome, sendRich, setIcons, syncCommands, typing } from "./telegram.ts";
 import * as D from "./db.ts";
 import type { Plant, User } from "./db.ts";
 import * as C from "./claude.ts";
 import { plantnetEnabled, plantnetIdentify } from "./plantnet.ts";
 import { fetchWeather, localDate, sky, Weather } from "./weather.ts";
 import { addDays, feedDue, getsRain, isOutdoor, projectWaterDays, waterStatus, WaterStatus, weatherAlerts } from "./watering.ts";
-import { COMMANDS, days, ICON_KEYS, LOC_SHORT, MENU, plural, ruDate, T, waterBar, WEEK_SHORT, whenWater } from "./texts.ts";
+import { COMMANDS, days, LOC_SHORT, plural, ruDate, T, waterBar, WEEK_SHORT, whenWater } from "./texts.ts";
 
 // ---------- утилиты
 
@@ -23,13 +23,6 @@ function byRoom<T extends { p: Plant }>(rows: T[]): [string, T[]][] {
     m.get(k)!.push(r);
   }
   return [...m.entries()];
-}
-
-function menuRows() {
-  return [
-    [mb(MENU[0].text, "success", MENU[0].icon), mb(MENU[1].text, undefined, MENU[1].icon)],
-    [mb(MENU[2].text, undefined, MENU[2].icon), mb(MENU[3].text, undefined, MENU[3].icon)],
-  ];
 }
 
 // печатает ответ claude на глазах и потом отправляет его целиком
@@ -120,32 +113,15 @@ async function onMessage(u: User, chat: number, msg: any) {
     ]);
   }
 
-  // премиум-эмодзи для иконки кнопки. команда или кнопка меню выводят из этого режима.
-  const raw: string = (msg.text ?? "").trim();
-  const isCommand = raw.startsWith("/") || MENU.some((m) => m.text === raw.toLowerCase());
-  if (s.state === "await_icon" && s.data.key && !isCommand) {
-    const ent = (msg.entities ?? []).find((e: any) => e.type === "custom_emoji");
-    if (!ent) return send(chat, T.iconNotCustom);
-    await D.setIcon(uid, s.data.key, ent.custom_emoji_id);
-    await D.saveSession(uid, { state: null, data: {} });
-    setIcons(await D.icons(uid));
-    const label = ICON_KEYS.find((k) => k.key === s.data.key)?.label ?? "";
-    await sendMenu(chat, T.iconSaved(label), menuRows());
-    return iconsMenu(u, chat);
-  }
-
-  let text = raw;
+  const text: string = (msg.text ?? "").trim();
   if (!text) return;
-  const menuHit = MENU.find((m) => m.text === text.toLowerCase());
-  if (menuHit) text = menuHit.cmd;
 
   if (text.startsWith("/")) {
     const cmd = text.split(/[\s@]/)[0].toLowerCase();
     await D.saveSession(uid, { state: null });
     switch (cmd) {
-      case "/start": case "/help": case "/menu": return sendMenu(chat, T.welcome(u.first_name ?? ""), menuRows());
+      case "/start": case "/help": case "/menu": return sendWelcome(chat, T.welcome(u.first_name ?? ""));
       case "/week": return week(u, chat, 0);
-      case "/icons": return iconsMenu(u, chat);
       case "/today": return digest(u, chat, true);
       case "/plants": return list(u, chat);
       case "/weather": return weatherReport(u, chat);
@@ -264,17 +240,6 @@ async function onCallback(u: User, chat: number, cb: any) {
       return edit(chat, mid, "в какую комнату?", rows);
     }
     case "wk": await answer(cb.id); return week(u, chat, Number(a), mid, arg2 === "g" ? "g" : "d");
-    case "ic": {
-      await answer(cb.id);
-      if (a === "clear") {
-        await D.db.from("icons").delete().eq("user_id", uid);
-        setIcons({});
-        await sendMenu(chat, "иконки убраны.", menuRows());
-        return;
-      }
-      await D.saveSession(uid, { state: "await_icon", data: { key: a } });
-      return send(chat, T.iconAsk(ICON_KEYS.find((k) => k.key === a)?.label ?? a));
-    }
     case "wr": {
       const room = data.slice(3);
       const w = await weather(u);
@@ -1007,15 +972,4 @@ async function week(u: User, chat: number, offset: number, editMid?: number, mod
     try { return await edit(chat, editMid, text, nav); } catch (e) { console.error("week edit", e); }
   }
   return send(chat, text, nav);
-}
-
-// ---------- иконки кнопок
-
-async function iconsMenu(_u: User, chat: number) {
-  const k: Keyboard = [];
-  for (let i = 0; i < ICON_KEYS.length; i += 3) {
-    k.push(ICON_KEYS.slice(i, i + 3).map((x) => b(x.label, `ic:${x.key}`, undefined, x.key)));
-  }
-  k.push([b("убрать все иконки", "ic:clear", "danger")]);
-  return send(chat, T.iconsIntro, k);
 }

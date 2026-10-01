@@ -93,11 +93,6 @@ export async function icons(uid: number): Promise<Record<string, string>> {
   return Object.fromEntries((data ?? []).map((r: any) => [r.key, r.custom_emoji_id]));
 }
 
-export async function setIcon(uid: number, key: string, id: string | null) {
-  if (id) check(await db.from("icons").upsert({ user_id: uid, key, custom_emoji_id: id }));
-  else check(await db.from("icons").delete().eq("user_id", uid).eq("key", key));
-}
-
 // комнаты в порядке добавления растений
 export async function rooms(uid: number): Promise<string[]> {
   const ps = await plants(uid);

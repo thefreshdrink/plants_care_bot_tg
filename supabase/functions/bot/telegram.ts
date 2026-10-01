@@ -18,14 +18,6 @@ export function b(text: string, data: string, style?: Style, icon?: string): But
   return btn;
 }
 
-// кнопка нижнего меню (reply keyboard)
-export function mb(text: string, style?: Style, icon?: string) {
-  const btn: Record<string, string> = { text };
-  if (style) btn.style = style;
-  if (icon && ICONS[icon]) btn.icon_custom_emoji_id = ICONS[icon];
-  return btn;
-}
-
 export async function tg<T = any>(method: string, body: Record<string, any> = {}, retry = false): Promise<T> {
   const res = await fetch(`${API}/${method}`, {
     method: "POST",
@@ -81,12 +73,10 @@ export const edit = (chat: number, messageId: number, text: string, k?: Keyboard
 export const editKeyboard = (chat: number, messageId: number, k?: Keyboard) =>
   tg("editMessageReplyMarkup", { chat_id: chat, message_id: messageId, reply_markup: { inline_keyboard: k ?? [] } });
 
-// постоянное меню внизу экрана
-export const sendMenu = (chat: number, text: string, rows: Record<string, string>[][]) =>
-  tg("sendMessage", {
-    chat_id: chat, text, parse_mode: "HTML",
-    reply_markup: { keyboard: rows, resize_keyboard: true, is_persistent: true },
-  });
+// приветствие. remove_keyboard убирает нижнее меню, которое было в прошлых версиях:
+// оно мешало открыть поиск эмодзи. команды живут в меню команд телеграма.
+export const sendWelcome = (chat: number, text: string) =>
+  tg("sendMessage", { chat_id: chat, text, parse_mode: "HTML", reply_markup: { remove_keyboard: true } });
 
 // черновик, который печатается на глазах (только личные чаты). пустой текст = «думаю…»
 export const draft = (chat: number, draftId: number, text: string) =>
