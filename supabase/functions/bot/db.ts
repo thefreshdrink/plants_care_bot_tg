@@ -49,7 +49,6 @@ export async function authorize(id: number, firstName: string): Promise<User | n
   if ((count ?? 0) === 0) {
     // первая настоящая хозяйка забирает заранее загруженную коллекцию
     await db.from("plants").update({ user_id: id }).eq("user_id", 0);
-    await db.from("wishlist").update({ user_id: id }).eq("user_id", 0);
     await db.from("events").update({ user_id: id }).eq("user_id", 0);
     await db.from("users").delete().eq("telegram_id", 0);
   }
@@ -69,8 +68,9 @@ export async function plants(uid: number): Promise<Plant[]> {
   return (check(await db.from("plants").select("*").eq("user_id", uid).eq("archived", false).order("created_at")) ?? []) as Plant[];
 }
 
+// архивные не отдаём: старые кнопки в чате не должны открывать убранное растение
 export async function plant(uid: number, id: string): Promise<Plant | null> {
-  return check(await db.from("plants").select("*").eq("user_id", uid).eq("id", id).maybeSingle());
+  return check(await db.from("plants").select("*").eq("user_id", uid).eq("id", id).eq("archived", false).maybeSingle());
 }
 
 export async function updatePlant(uid: number, id: string, patch: Partial<Plant>) {
@@ -93,11 +93,6 @@ export async function icons(uid: number): Promise<Record<string, string>> {
   return Object.fromEntries((data ?? []).map((r: any) => [r.key, r.custom_emoji_id]));
 }
 
-export async function setIcon(uid: number, key: string, id: string | null) {
-  if (id) check(await db.from("icons").upsert({ user_id: uid, key, custom_emoji_id: id }));
-  else check(await db.from("icons").delete().eq("user_id", uid).eq("key", key));
-}
-
 // комнаты в порядке добавления растений
 export async function rooms(uid: number): Promise<string[]> {
   const ps = await plants(uid);
@@ -113,7 +108,8 @@ export async function roomLocation(uid: number, room: string): Promise<Plant["lo
   return Object.entries(count).sort((a, b) => b[1] - a[1])[0][0] as Plant["location"];
 }
 
+// дождь, отмеченный кнопкой, в неделе тоже считается поливом
 export async function waterEvents(uid: number, sinceIso: string): Promise<{ plant_id: string; created_at: string }[]> {
-  const { data } = await db.from("events").select("plant_id, created_at").eq("user_id", uid).eq("kind", "water").gte("created_at", sinceIso);
+  const { data } = await db.from("events").select("plant_id, created_at").eq("user_id", uid).in("kind", ["water", "rain"]).gte("created_at", sinceIso);
   return data ?? [];
 }

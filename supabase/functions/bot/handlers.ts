@@ -1,13 +1,13 @@
 // вся логика диалога
 import * as tgm from "./telegram.ts";
-import { answer, b, draft, edit, editKeyboard, esc, Keyboard, mb, Preview, send, sendMenu, sendPhoto, sendRich, setIcons, syncCommands, typing } from "./telegram.ts";
+import { answer, b, draft, edit, editKeyboard, esc, Keyboard, Preview, send, sendPhoto, sendWelcome, sendRich, setIcons, syncCommands, typing } from "./telegram.ts";
 import * as D from "./db.ts";
 import type { Plant, User } from "./db.ts";
 import * as C from "./claude.ts";
 import { plantnetEnabled, plantnetIdentify } from "./plantnet.ts";
 import { fetchWeather, localDate, sky, Weather } from "./weather.ts";
-import { addDays, feedDue, isOutdoor, projectWaterDays, waterStatus, WaterStatus, weatherAlerts } from "./watering.ts";
-import { COMMANDS, days, ICON_KEYS, LOC_SHORT, MENU, plural, ruDate, T, waterBar, WEEK_SHORT, whenWater } from "./texts.ts";
+import { addDays, feedDue, getsRain, isOutdoor, projectWaterDays, waterStatus, WaterStatus, weatherAlerts } from "./watering.ts";
+import { COMMANDS, days, LOC_SHORT, plural, ruDate, T, waterBar, WEEK_SHORT, whenWater } from "./texts.ts";
 
 // ---------- утилиты
 
@@ -23,13 +23,6 @@ function byRoom<T extends { p: Plant }>(rows: T[]): [string, T[]][] {
     m.get(k)!.push(r);
   }
   return [...m.entries()];
-}
-
-function menuRows() {
-  return [
-    [mb(MENU[0].text, "success", MENU[0].icon), mb(MENU[1].text, undefined, MENU[1].icon)],
-    [mb(MENU[2].text, undefined, MENU[2].icon), mb(MENU[3].text, undefined, MENU[3].icon)],
-  ];
 }
 
 // печатает ответ claude на глазах и потом отправляет его целиком
@@ -120,34 +113,18 @@ async function onMessage(u: User, chat: number, msg: any) {
     ]);
   }
 
-  // премиум-эмодзи для иконки кнопки
-  if (s.state === "await_icon" && s.data.key) {
-    const ent = (msg.entities ?? []).find((e: any) => e.type === "custom_emoji");
-    if (!ent) return send(chat, T.iconNotCustom);
-    await D.setIcon(uid, s.data.key, ent.custom_emoji_id);
-    await D.saveSession(uid, { state: null, data: {} });
-    setIcons(await D.icons(uid));
-    const label = ICON_KEYS.find((k) => k.key === s.data.key)?.label ?? "";
-    await sendMenu(chat, T.iconSaved(label), menuRows());
-    return iconsMenu(u, chat);
-  }
-
-  let text: string = (msg.text ?? "").trim();
+  const text: string = (msg.text ?? "").trim();
   if (!text) return;
-  const menuHit = MENU.find((m) => m.text === text.toLowerCase());
-  if (menuHit) text = menuHit.cmd;
 
   if (text.startsWith("/")) {
     const cmd = text.split(/[\s@]/)[0].toLowerCase();
     await D.saveSession(uid, { state: null });
     switch (cmd) {
-      case "/start": case "/help": case "/menu": return sendMenu(chat, T.welcome(u.first_name ?? ""), menuRows());
+      case "/start": case "/help": case "/menu": return sendWelcome(chat, T.welcome(u.first_name ?? ""));
       case "/week": return week(u, chat, 0);
-      case "/icons": return iconsMenu(u, chat);
       case "/today": return digest(u, chat, true);
       case "/plants": return list(u, chat);
       case "/weather": return weatherReport(u, chat);
-      case "/wish": return wishlist(u, chat);
       case "/settings": return settings(u, chat);
     }
   }
@@ -163,13 +140,6 @@ async function onMessage(u: User, chat: number, msg: any) {
       return card(u, chat, s.data.plant_id);
     case "await_nickname":
       return askLastWatered(u, chat, { ...s.data, nickname: text.slice(0, 40) });
-    case "await_wish": {
-      const [name, ...rest] = text.split(",");
-      await D.db.from("wishlist").insert({ user_id: uid, name: name.trim(), note: rest.join(",").trim() || null });
-      await D.saveSession(uid, { state: null });
-      await send(chat, T.wishAdded(name.trim()));
-      return wishlist(u, chat);
-    }
     case "await_rename":
       await D.updatePlant(uid, s.data.plant_id, { nickname: text.slice(0, 40) });
       await D.saveSession(uid, { state: null, data: {} });
@@ -270,17 +240,6 @@ async function onCallback(u: User, chat: number, cb: any) {
       return edit(chat, mid, "в какую комнату?", rows);
     }
     case "wk": await answer(cb.id); return week(u, chat, Number(a), mid, arg2 === "g" ? "g" : "d");
-    case "ic": {
-      await answer(cb.id);
-      if (a === "clear") {
-        await D.db.from("icons").delete().eq("user_id", uid);
-        setIcons({});
-        await sendMenu(chat, "иконки убраны.", menuRows());
-        return;
-      }
-      await D.saveSession(uid, { state: "await_icon", data: { key: a } });
-      return send(chat, T.iconAsk(ICON_KEYS.find((k) => k.key === a)?.label ?? a));
-    }
     case "wr": {
       const room = data.slice(3);
       const w = await weather(u);
@@ -334,6 +293,13 @@ async function onCallback(u: User, chat: number, cb: any) {
       for (const p of due) await water(u, p);
       await answer(cb.id, "всё полито");
       return editKeyboard(chat, mid, []);
+    }
+    case "rain": {
+      // rain:d из дайджеста, rain:c:<id> из карточки
+      const wet = await rainWater(u);
+      await answer(cb.id, "засчитала дождь как полив");
+      if (a === "c") return card(u, chat, arg2, mid);
+      return digestUpdateKeyboard(cb, chat, mid, data, wet.map((p) => `wd:${p.id}`));
     }
     case "f": case "fd": {
       const p = await D.plant(uid, a);
@@ -415,30 +381,18 @@ async function onCallback(u: User, chat: number, cb: any) {
     }
     case "del": {
       await answer(cb.id);
-      return edit(chat, mid, "точно убрать? история тоже удалится.", [[
+      return edit(chat, mid, "точно убрать? история сохранится.", [[
         b("да, убрать", `delok:${a}`, "danger"),
         b("нет", `p:${a}`),
       ]]);
     }
     case "delok": {
       const p = await D.plant(uid, a);
-      await D.db.from("plants").delete().eq("user_id", uid).eq("id", a);
+      // не удаляем: каскад стёр бы всю историю в events
+      await D.updatePlant(uid, a, { archived: true });
       await answer(cb.id);
       return edit(chat, mid, T.deleted(p ? nameOf(p) : ""));
     }
-
-    // --- wishlist
-    case "wadd": {
-      await answer(cb.id);
-      await D.saveSession(uid, { state: "await_wish" });
-      return send(chat, T.wishAsk);
-    }
-    case "wrm": {
-      await D.db.from("wishlist").delete().eq("user_id", uid).eq("id", Number(a));
-      await answer(cb.id, "убрано");
-      return wishlist(u, chat, mid);
-    }
-
 
     // --- настройки
     case "hr": {
@@ -574,6 +528,7 @@ async function card(u: User, chat: number, id: string, editMid?: number) {
     b("не сегодня", `snz:${id}`, undefined, "snooze"),
     b("инфо", `care:${id}`, undefined, "care"),
   ]);
+  if ((await D.plants(u.telegram_id)).some((x) => getsRain(x.location))) k.push([b("был дождь", `rain:c:${id}`)]);
   const nav = [b("ещё", `ed:${id}`, undefined, "edit"), b("весь сад", "list", undefined, "list")];
   if (p.photo_file_id) nav.unshift(b("фото", `pho:${id}`));
   k.push(nav);
@@ -620,9 +575,16 @@ async function careText(u: User, chat: number, id: string) {
   return sendRich(chat, rich, plain, [[b("← к растению", `p:${id}`, "primary")]]);
 }
 
-async function water(u: User, p: Plant) {
+async function water(u: User, p: Plant, kind: "water" | "rain" = "water") {
   await D.updatePlant(u.telegram_id, p.id, { last_watered_at: new Date().toISOString(), snoozed_until: null });
-  await D.logEvent(u.telegram_id, p.id, "water");
+  await D.logEvent(u.telegram_id, p.id, kind);
+}
+
+// дождь поливает всех, кто под открытым небом
+async function rainWater(u: User): Promise<Plant[]> {
+  const wet = (await D.plants(u.telegram_id)).filter((p) => getsRain(p.location));
+  for (const p of wet) await water(u, p, "rain");
+  return wet;
 }
 
 // ---------- сад: комнаты, самая срочная раскрыта
@@ -814,6 +776,7 @@ export async function digest(u: User, chat: number, manual: boolean): Promise<bo
     for (const { p } of rows) k.push([b(`полито: ${nameOf(p)}`, `wd:${p.id}`, undefined, "water")]);
   }
   if (due.length > 1) k.push([b("всё полито", "wall", "success", "water")]);
+  if (ps.some((p) => getsRain(p.location))) k.push([b("был дождь", "rain:d")]);
   for (const p of feed) k.push([b(`подкормлено: ${nameOf(p)}`, `fd:${p.id}`, undefined, "feed")]);
 
   await send(chat, out.join("\n"), k.length ? k : undefined);
@@ -907,21 +870,7 @@ async function freeChat(u: User, chat: number, text: string, history: any[]) {
   return send(chat, esc(reply));
 }
 
-// ---------- wishlist и настройки
-
-async function wishlist(u: User, chat: number, editMid?: number) {
-  const { data } = await D.db.from("wishlist").select("*").eq("user_id", u.telegram_id).order("created_at");
-  const items = data ?? [];
-  if (!items.length && !editMid) {
-    await D.saveSession(u.telegram_id, { state: "await_wish" });
-    return send(chat, T.wishEmpty);
-  }
-  const text = "<b>хочу</b>\n\n" +
-    (items.map((x: any) => `${esc(x.name)}${x.note ? ` <i>${esc(x.note)}</i>` : ""}`).join("\n") || "пусто");
-  const k: Keyboard = items.map((x: any) => [b(`купила / убрать: ${x.name}`, `wrm:${x.id}`)]);
-  k.push([b("добавить", "wadd", "success")]);
-  return editMid ? edit(chat, editMid, text, k) : send(chat, text, k);
-}
+// ---------- настройки
 
 async function settings(u: User, chat: number) {
   const hours = [6, 7, 8, 9, 10, 20];
@@ -1023,15 +972,4 @@ async function week(u: User, chat: number, offset: number, editMid?: number, mod
     try { return await edit(chat, editMid, text, nav); } catch (e) { console.error("week edit", e); }
   }
   return send(chat, text, nav);
-}
-
-// ---------- иконки кнопок
-
-async function iconsMenu(_u: User, chat: number) {
-  const k: Keyboard = [];
-  for (let i = 0; i < ICON_KEYS.length; i += 3) {
-    k.push(ICON_KEYS.slice(i, i + 3).map((x) => b(x.label, `ic:${x.key}`, undefined, x.key)));
-  }
-  k.push([b("убрать все иконки", "ic:clear", "danger")]);
-  return send(chat, T.iconsIntro, k);
 }

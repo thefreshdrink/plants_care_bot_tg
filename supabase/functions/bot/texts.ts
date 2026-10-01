@@ -50,10 +50,8 @@ export const T = {
     "/week · полив на неделю\n" +
     "/plants · мой сад\n" +
     "/weather · погода для сада\n" +
-    "/wish · список «хочу»\n" +
-    "/settings · время утреннего сообщения\n" +
-    "/icons · иконки на кнопках\n\n" +
-    "главное всегда под рукой в меню внизу. на любой вопрос текстом отвечу, зная твои растения и прогноз.",
+    "/settings · время утреннего сообщения\n\n" +
+    "команды всегда под рукой в меню слева от поля ввода. на любой вопрос текстом отвечу, зная твои растения и прогноз.",
   notOwner: "это личный бот, он отвечает только своей хозяйке.",
   photoWhat: "что делаем с фото?",
   identifying: "смотрю…",
@@ -70,9 +68,6 @@ export const T = {
   diagnosePhoto: (n: string) => `пришли фото, где видно проблему у «${esc(n)}». можно добавить вопрос в подпись.`,
   diagnosing: "разглядываю…",
   pickPlantForDiagnosis: "у какого растения проблема?",
-  wishEmpty: "список пуст. напиши, что хочешь добавить:",
-  wishAsk: "напиши название растения (можно с заметкой через запятую):",
-  wishAdded: (n: string) => `в списке «хочу»: ${esc(n)}`,
   settings: (h: number) => `утреннее сообщение приходит в <b>${h}:00</b>. когда удобнее?`,
   settingsSaved: (h: number) => `договорились, буду писать в ${h}:00.`,
   renameAsk: "новое имя:",
@@ -80,11 +75,6 @@ export const T = {
   error: "что-то сломалось на моей стороне. попробуй ещё раз через минуту.",
   askRoom: (n: string) => `<b>${esc(n)}</b>\n\nв какой комнате?`,
   newRoomAsk: "как называется комната? одним-двумя словами, например «спальня».",
-  iconsIntro: "иконки на кнопках. нажми на действие и пришли один премиум-эмодзи, он встанет на кнопку.",
-  iconAsk: (label: string) => `пришли премиум-эмодзи для «${esc(label)}». обычные эмодзи не подойдут, нужен из набора custom emoji.`,
-  iconSaved: (label: string) => `готово, иконка для «${esc(label)}» стоит.`,
-  iconNotCustom: "это обычный эмодзи. нужен премиум-эмодзи из набора (они анимированные или с особым рисунком).",
-  menuHint: "меню внизу обновлено.",
   weekLegend: "○ полить · • полито",
   weekEmpty: "на этой неделе поливать никого не нужно.",
   weekDoneHint: "зачёркнуто: уже полито",
@@ -96,30 +86,6 @@ export const T = {
   roomWalk: "обход: дальше туда, где ждут",
 };
 
-// кнопки меню внизу экрана и какую команду они вызывают
-export const MENU: { text: string; cmd: string; icon: string }[] = [
-  { text: "сегодня", cmd: "/today", icon: "today" },
-  { text: "неделя", cmd: "/week", icon: "week" },
-  { text: "сад", cmd: "/plants", icon: "list" },
-  { text: "погода", cmd: "/weather", icon: "weather" },
-];
-
-// какие иконки можно настроить
-export const ICON_KEYS: { key: string; label: string }[] = [
-  { key: "water", label: "полито" },
-  { key: "feed", label: "подкормлено" },
-  { key: "snooze", label: "не сегодня" },
-  { key: "diag", label: "что с ним" },
-  { key: "care", label: "уход" },
-  { key: "more", label: "чаще" },
-  { key: "less", label: "реже" },
-  { key: "edit", label: "изменить" },
-  { key: "today", label: "сегодня" },
-  { key: "week", label: "неделя" },
-  { key: "list", label: "сад" },
-  { key: "weather", label: "погода" },
-];
-
 export const WEEK_SHORT = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"];
 
 // команды в меню телеграма. телеграм хранит этот список у себя, бот пересылает его сам.
@@ -128,8 +94,5 @@ export const COMMANDS: { command: string; description: string }[] = [
   { command: "week", description: "полив на неделю" },
   { command: "plants", description: "мой сад" },
   { command: "weather", description: "погода для сада" },
-  { command: "wish", description: "список «хочу»" },
   { command: "settings", description: "время утреннего сообщения" },
-  { command: "icons", description: "иконки на кнопках" },
-  { command: "menu", description: "показать меню внизу" },
 ];
