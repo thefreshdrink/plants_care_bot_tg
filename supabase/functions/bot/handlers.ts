@@ -7,7 +7,7 @@ import * as C from "./claude.ts";
 import { plantnetEnabled, plantnetIdentify } from "./plantnet.ts";
 import { fetchWeather, localDate, sky, Weather } from "./weather.ts";
 import { addDays, feedDue, getsRain, isOutdoor, projectWaterDays, waterStatus, WaterStatus, weatherAlerts } from "./watering.ts";
-import { COMMANDS, days, LOC_SHORT, plural, ruDate, T, waterBar, WEEK_SHORT, whenWater } from "./texts.ts";
+import { COMMANDS, days, ICON_KEYS, LOC_SHORT, plural, ruDate, T, waterBar, WEEK_SHORT, whenWater } from "./texts.ts";
 
 // ---------- утилиты
 
@@ -96,7 +96,8 @@ async function onMessage(u: User, chat: number, msg: any) {
   if (msg.photo?.length) {
     const fileId = msg.photo.at(-1).file_id; // самое большое разрешение
     if (s.state === "await_new_photo" && s.data.plant_id) {
-      await D.updatePlant(uid, s.data.plant_id, { photo_file_id: fileId });
+      // photo_path сбрасываем: иначе превью покажет старую копию из хранилища, photoPreview заведёт новую
+      await D.updatePlant(uid, s.data.plant_id, { photo_file_id: fileId, photo_path: null });
       await D.logEvent(uid, s.data.plant_id, "photo", undefined, fileId);
       await D.saveSession(uid, { state: null, data: {} });
       return card(u, chat, s.data.plant_id);
@@ -114,6 +115,19 @@ async function onMessage(u: User, chat: number, msg: any) {
   }
 
   const text: string = (msg.text ?? "").trim();
+
+  // ждём премиум-эмодзи для иконки. любая команда выводит из этого режима и обрабатывается как обычно.
+  if (s.state === "await_icon" && s.data.key && !text.startsWith("/")) {
+    const ent = (msg.entities ?? []).find((e: any) => e.type === "custom_emoji");
+    if (!ent) return send(chat, T.iconNotCustom);
+    await D.setIcon(uid, s.data.key, ent.custom_emoji_id);
+    await D.saveSession(uid, { state: null, data: {} });
+    setIcons(await D.icons(uid));
+    const label = ICON_KEYS.find((k) => k.key === s.data.key)?.label ?? "";
+    await send(chat, T.iconSaved(label));
+    return iconsMenu(chat);
+  }
+
   if (!text) return;
 
   if (text.startsWith("/")) {
@@ -126,6 +140,7 @@ async function onMessage(u: User, chat: number, msg: any) {
       case "/plants": return list(u, chat);
       case "/weather": return weatherReport(u, chat);
       case "/settings": return settings(u, chat);
+      case "/icons": return iconsMenu(chat);
     }
   }
 
@@ -157,6 +172,8 @@ async function onCallback(u: User, chat: number, cb: any) {
   const mid: number = cb.message.message_id;
   const [cmd, a, arg2] = data.split(":");
   const s = await D.getSession(uid);
+  // нажала другую кнопку, пока бот ждал эмодзи: значит, передумала, не держим режим иконки
+  if (s.state === "await_icon" && cmd !== "ic") await D.saveSession(uid, { state: null, data: {} });
 
   switch (cmd) {
     // --- фото: что с ним делать
@@ -240,6 +257,16 @@ async function onCallback(u: User, chat: number, cb: any) {
       return edit(chat, mid, "в какую комнату?", rows);
     }
     case "wk": await answer(cb.id); return week(u, chat, Number(a), mid, arg2 === "g" ? "g" : "d");
+    case "ic": {
+      await answer(cb.id);
+      if (a === "clear") {
+        await D.db.from("icons").delete().eq("user_id", uid);
+        setIcons({});
+        return send(chat, T.iconsCleared);
+      }
+      await D.saveSession(uid, { state: "await_icon", data: { key: a } });
+      return send(chat, T.iconAsk(ICON_KEYS.find((k) => k.key === a)?.label ?? a));
+    }
     case "wr": {
       const room = data.slice(3);
       const w = await weather(u);
@@ -528,12 +555,14 @@ async function card(u: User, chat: number, id: string, editMid?: number) {
     b("не сегодня", `snz:${id}`, undefined, "snooze"),
     b("инфо", `care:${id}`, undefined, "care"),
   ]);
-  if ((await D.plants(u.telegram_id)).some((x) => getsRain(x.location))) k.push([b("был дождь", `rain:c:${id}`)]);
-  const nav = [b("ещё", `ed:${id}`, undefined, "edit"), b("весь сад", "list", undefined, "list")];
-  if (p.photo_file_id) nav.unshift(b("фото", `pho:${id}`));
-  k.push(nav);
+  // дождь поливает только тех, кто под открытым небом: у домашних кнопка не нужна
+  if (getsRain(p.location)) k.push([b("был дождь", `rain:c:${id}`, undefined, "rain")]);
+  // фото стоит крупно над текстом, а если его нет, предлагаем добавить
+  if (!p.photo_file_id) k.push([b("добавить фото", `nph:${id}`, "primary", "photo")]);
+  k.push([b("ещё", `ed:${id}`, undefined, "edit"), b("весь сад", "list", undefined, "list")]);
 
-  return showScreen(chat, lines.join("\n"), k, editMid, "card", await photoPreview(u, p));
+  const pv = await photoPreview(u, p);
+  return showScreen(chat, lines.join("\n"), k, editMid, "card", pv ? { ...pv, above: true, large: true } : undefined);
 }
 
 async function careText(u: User, chat: number, id: string) {
@@ -776,7 +805,7 @@ export async function digest(u: User, chat: number, manual: boolean): Promise<bo
     for (const { p } of rows) k.push([b(`полито: ${nameOf(p)}`, `wd:${p.id}`, undefined, "water")]);
   }
   if (due.length > 1) k.push([b("всё полито", "wall", "success", "water")]);
-  if (ps.some((p) => getsRain(p.location))) k.push([b("был дождь", "rain:d")]);
+  if (ps.some((p) => getsRain(p.location))) k.push([b("был дождь", "rain:d", undefined, "rain")]);
   for (const p of feed) k.push([b(`подкормлено: ${nameOf(p)}`, `fd:${p.id}`, undefined, "feed")]);
 
   await send(chat, out.join("\n"), k.length ? k : undefined);
@@ -972,4 +1001,15 @@ async function week(u: User, chat: number, offset: number, editMid?: number, mod
     try { return await edit(chat, editMid, text, nav); } catch (e) { console.error("week edit", e); }
   }
   return send(chat, text, nav);
+}
+
+// ---------- иконки кнопок
+
+async function iconsMenu(chat: number) {
+  const k: Keyboard = [];
+  for (let i = 0; i < ICON_KEYS.length; i += 3) {
+    k.push(ICON_KEYS.slice(i, i + 3).map((x) => b(x.label, `ic:${x.key}`, undefined, x.key)));
+  }
+  k.push([b("убрать все иконки", "ic:clear", "danger")]);
+  return send(chat, T.iconsIntro, k);
 }
