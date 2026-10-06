@@ -96,7 +96,8 @@ async function onMessage(u: User, chat: number, msg: any) {
   if (msg.photo?.length) {
     const fileId = msg.photo.at(-1).file_id; // самое большое разрешение
     if (s.state === "await_new_photo" && s.data.plant_id) {
-      await D.updatePlant(uid, s.data.plant_id, { photo_file_id: fileId });
+      // photo_path сбрасываем: иначе превью покажет старую копию из хранилища, photoPreview заведёт новую
+      await D.updatePlant(uid, s.data.plant_id, { photo_file_id: fileId, photo_path: null });
       await D.logEvent(uid, s.data.plant_id, "photo", undefined, fileId);
       await D.saveSession(uid, { state: null, data: {} });
       return card(u, chat, s.data.plant_id);
