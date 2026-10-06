@@ -50,7 +50,8 @@ export const T = {
     "/week · полив на неделю\n" +
     "/plants · мой сад\n" +
     "/weather · погода для сада\n" +
-    "/settings · время утреннего сообщения\n\n" +
+    "/settings · время утреннего сообщения\n" +
+    "/icons · иконки на кнопках\n\n" +
     "команды всегда под рукой в меню слева от поля ввода. на любой вопрос текстом отвечу, зная твои растения и прогноз.",
   notOwner: "это личный бот, он отвечает только своей хозяйке.",
   photoWhat: "что делаем с фото?",
@@ -75,6 +76,11 @@ export const T = {
   error: "что-то сломалось на моей стороне. попробуй ещё раз через минуту.",
   askRoom: (n: string) => `<b>${esc(n)}</b>\n\nв какой комнате?`,
   newRoomAsk: "как называется комната? одним-двумя словами, например «спальня».",
+  iconsIntro: "иконки на кнопках. нажми на действие и пришли один премиум-эмодзи, он встанет на кнопку.",
+  iconAsk: (label: string) => `пришли премиум-эмодзи для «${esc(label)}». обычные эмодзи не подойдут, нужен из набора custom emoji. передумала: любая команда, например /plants.`,
+  iconSaved: (label: string) => `готово, иконка для «${esc(label)}» стоит.`,
+  iconNotCustom: "это обычный эмодзи. нужен премиум-эмодзи из набора (они анимированные или с особым рисунком).",
+  iconsCleared: "иконки убраны.",
   weekLegend: "○ полить · • полито",
   weekEmpty: "на этой неделе поливать никого не нужно.",
   weekDoneHint: "зачёркнуто: уже полито",
@@ -86,6 +92,23 @@ export const T = {
   roomWalk: "обход: дальше туда, где ждут",
 };
 
+// какие иконки можно настроить: ключ совпадает с последним аргументом b() у кнопки
+export const ICON_KEYS: { key: string; label: string }[] = [
+  { key: "water", label: "полито" },
+  { key: "feed", label: "подкормлено" },
+  { key: "snooze", label: "не сегодня" },
+  { key: "rain", label: "был дождь" },
+  { key: "care", label: "инфо" },
+  { key: "photo", label: "добавить фото" },
+  { key: "diag", label: "что с ним" },
+  { key: "more", label: "чаще" },
+  { key: "less", label: "реже" },
+  { key: "edit", label: "ещё" },
+  { key: "list", label: "сад" },
+  { key: "week", label: "неделя" },
+  { key: "today", label: "сегодня" },
+];
+
 export const WEEK_SHORT = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"];
 
 // команды в меню телеграма. телеграм хранит этот список у себя, бот пересылает его сам.
@@ -95,4 +118,5 @@ export const COMMANDS: { command: string; description: string }[] = [
   { command: "plants", description: "мой сад" },
   { command: "weather", description: "погода для сада" },
   { command: "settings", description: "время утреннего сообщения" },
+  { command: "icons", description: "иконки на кнопках" },
 ];
