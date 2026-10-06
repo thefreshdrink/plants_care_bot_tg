@@ -529,12 +529,14 @@ async function card(u: User, chat: number, id: string, editMid?: number) {
     b("не сегодня", `snz:${id}`, undefined, "snooze"),
     b("инфо", `care:${id}`, undefined, "care"),
   ]);
-  if ((await D.plants(u.telegram_id)).some((x) => getsRain(x.location))) k.push([b("был дождь", `rain:c:${id}`)]);
-  const nav = [b("ещё", `ed:${id}`, undefined, "edit"), b("весь сад", "list", undefined, "list")];
-  if (p.photo_file_id) nav.unshift(b("фото", `pho:${id}`));
-  k.push(nav);
+  // дождь поливает только тех, кто под открытым небом: у домашних кнопка не нужна
+  if (getsRain(p.location)) k.push([b("был дождь", `rain:c:${id}`, undefined, "rain")]);
+  // фото стоит крупно над текстом, а если его нет, предлагаем добавить
+  if (!p.photo_file_id) k.push([b("добавить фото", `nph:${id}`, "primary", "photo")]);
+  k.push([b("ещё", `ed:${id}`, undefined, "edit"), b("весь сад", "list", undefined, "list")]);
 
-  return showScreen(chat, lines.join("\n"), k, editMid, "card", await photoPreview(u, p));
+  const pv = await photoPreview(u, p);
+  return showScreen(chat, lines.join("\n"), k, editMid, "card", pv ? { ...pv, above: true, large: true } : undefined);
 }
 
 async function careText(u: User, chat: number, id: string) {

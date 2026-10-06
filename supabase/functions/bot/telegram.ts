@@ -48,12 +48,13 @@ function plainMarkup(m: any): any {
 
 const kb = (k?: Keyboard) => (k ? { reply_markup: { inline_keyboard: k } } : {});
 
-// превью ссылки: телеграм показывает картинку маленькой сбоку от текста.
-// ссылка должна вести прямо на файл: html-страницу с разметкой он не обходит, это проверено на живом боте.
-export type Preview = { url: string; above?: boolean };
+// превью ссылки: по умолчанию телеграм показывает картинку маленькой сбоку от текста,
+// с large просит показать её крупно. ссылка должна вести прямо на файл:
+// html-страницу с разметкой он не обходит, это проверено на живом боте.
+export type Preview = { url: string; above?: boolean; large?: boolean };
 const preview = (pv?: Preview) => ({
   link_preview_options: pv
-    ? { url: pv.url, prefer_small_media: true, show_above_text: !!pv.above }
+    ? { url: pv.url, ...(pv.large ? { prefer_large_media: true } : { prefer_small_media: true }), show_above_text: !!pv.above }
     : { is_disabled: true },
 });
 
