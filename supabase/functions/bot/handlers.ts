@@ -174,8 +174,14 @@ async function onCallback(u: User, chat: number, cb: any) {
       const img = await photoOf(s.data.photo);
       let candidates: C.Candidate[] = [];
       let isPlant = true;
-      if (plantnetEnabled) candidates = await plantnetIdentify(img.bytes, img.mime).catch(() => []);
-      if (!candidates.length) ({ isPlant, candidates } = await C.identify(img));
+      // определяет claude; pl@ntnet только запасной, если claude упал
+      try {
+        ({ isPlant, candidates } = await C.identify(img, s.data.caption));
+      } catch (e) {
+        if (!plantnetEnabled) throw e;
+        console.error("identify", e);
+        candidates = await plantnetIdentify(img.bytes, img.mime).catch(() => []);
+      }
       if (!isPlant || !candidates.length) return edit(chat, mid, T.notAPlant);
       await D.saveSession(uid, { data: { ...s.data, candidates } });
 
