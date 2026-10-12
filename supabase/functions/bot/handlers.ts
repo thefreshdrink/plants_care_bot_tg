@@ -326,13 +326,14 @@ async function onCallback(u: User, chat: number, cb: any) {
       return sendPhoto(chat, p.photo_file_id, `<b>${esc(nameOf(p))}</b>`, [[b("← к растению", `p:${a}`, "primary")]]);
     }
 
-    case "w": case "wd": {
+    case "w": case "wd": case "wn": case "wdn": {
+      // wn и wdn: полито без удобрения, из карточки и из утреннего сообщения
       const p = await D.plant(uid, a);
       if (!p) return answer(cb.id);
-      const fed = await water(u, p);
+      const fed = await water(u, p, "water", cmd === "wn" || cmd === "wdn");
       await answer(cb.id, fed ? T.wateredFed(nameOf(p)) : T.watered(nameOf(p)));
-      if (cmd === "w") return card(u, chat, a, mid);
-      return digestUpdateKeyboard(cb, chat, mid, data, []);
+      if (cmd === "w" || cmd === "wn") return card(u, chat, a, mid);
+      return digestUpdateKeyboard(cb, chat, mid, data, [`wd:${a}`]);
     }
     case "wall": {
       const w = await weather(u);
@@ -598,11 +599,19 @@ async function card(u: User, chat: number, id: string, editMid?: number) {
   const fedDue = needsFeed(u, p);
   if (fedDue) lines.push(st.due ? "сегодня полить с удобрением" : "удобрение: со следующим поливом");
   const k: Keyboard = [];
-  k.push([
-    b(fedDue ? "полито с удобрением" : "полито", `w:${id}`, "success", "water"),
-    b("не сегодня", `snz:${id}`, undefined, "snooze"),
-    b("инфо", `care:${id}`, undefined, "care"),
-  ]);
+  if (fedDue) {
+    k.push([
+      b("полито с удобрением", `w:${id}`, "success", "water"),
+      b("без удобрения", `wn:${id}`, undefined, "nofeed"),
+    ]);
+    k.push([b("не сегодня", `snz:${id}`, undefined, "snooze"), b("инфо", `care:${id}`, undefined, "care")]);
+  } else {
+    k.push([
+      b("полито", `w:${id}`, "success", "water"),
+      b("не сегодня", `snz:${id}`, undefined, "snooze"),
+      b("инфо", `care:${id}`, undefined, "care"),
+    ]);
+  }
   // дождь поливает только тех, кто под открытым небом: у домашних кнопка не нужна
   if (getsRain(p.location)) k.push([b("был дождь", `rain:c:${id}`, undefined, "rain")]);
   // фото стоит крупно над текстом, а если его нет, предлагаем добавить
@@ -701,10 +710,11 @@ function needsFeed(u: User, p: Plant): boolean {
   );
 }
 
-// возвращает true, если вместе с поливом засчитана подкормка
-async function water(u: User, p: Plant, kind: "water" | "rain" = "water"): Promise<boolean> {
+// возвращает true, если вместе с поливом засчитана подкормка.
+// noFeed: полила простой водой, хотя удобрение уже пора; оно подождёт следующего полива
+async function water(u: User, p: Plant, kind: "water" | "rain" = "water", noFeed = false): Promise<boolean> {
   const now = new Date().toISOString();
-  const fed = kind === "water" && needsFeed(u, p);
+  const fed = kind === "water" && !noFeed && needsFeed(u, p);
   await D.updatePlant(u.telegram_id, p.id, { last_watered_at: now, snoozed_until: null, ...(fed ? { last_fed_at: now } : {}) });
   await D.logEvent(u.telegram_id, p.id, kind);
   if (fed) await D.logEvent(u.telegram_id, p.id, "feed");
@@ -883,7 +893,12 @@ export async function digest(u: User, chat: number, manual: boolean): Promise<bo
     if (rows.length > 1 && new TextEncoder().encode(`wr:${room}`).length <= 64) {
       k.push([b(`полито: ${room} · ${rows.length}`, `wr:${room}`, "success", "water")]);
     }
-    for (const { p } of rows) k.push([b(`полито: ${nameOf(p)}${feed.has(p.id) ? " + удобрение" : ""}`, `wd:${p.id}`, undefined, "water")]);
+    for (const { p } of rows) {
+      // кнопка полива всегда первая в ряду: по ней digestUpdateKeyboard убирает ряд целиком
+      const row = [b(`полито: ${nameOf(p)}${feed.has(p.id) ? " + удобрение" : ""}`, `wd:${p.id}`, undefined, "water")];
+      if (feed.has(p.id)) row.push(b("без удобрения", `wdn:${p.id}`, undefined, "nofeed"));
+      k.push(row);
+    }
   }
   if (due.length > 1) k.push([b("всё полито", "wall", "success", "water")]);
   if (ps.some((p) => getsRain(p.location))) k.push([b("был дождь", "rain:d", undefined, "rain")]);

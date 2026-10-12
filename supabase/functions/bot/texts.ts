@@ -101,6 +101,7 @@ export const T = {
 // какие иконки можно настроить: ключ совпадает с последним аргументом b() у кнопки
 export const ICON_KEYS: { key: string; label: string }[] = [
   { key: "water", label: "полито" },
+  { key: "nofeed", label: "без удобрения" },
   { key: "snooze", label: "не сегодня" },
   { key: "rain", label: "был дождь" },
   { key: "care", label: "инфо" },
