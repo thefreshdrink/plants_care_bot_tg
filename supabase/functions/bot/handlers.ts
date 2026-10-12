@@ -106,7 +106,17 @@ async function onMessage(u: User, chat: number, msg: any) {
       await D.saveSession(uid, { state: null, data: {} });
       return diagnose(u, chat, fileId, s.data.plant_id, msg.caption);
     }
-    await D.saveSession(uid, { state: null, data: { photo: fileId, caption: msg.caption ?? null } });
+    const photoData = { photo: fileId, caption: msg.caption ?? null };
+    if (s.state === "await_id_photo") {
+      await D.saveSession(uid, { state: null, data: photoData });
+      const m = await send(chat, T.identifying);
+      return identifyPhoto(u, chat, photoData, "id", m.message_id);
+    }
+    if (s.state === "await_doc_photo") {
+      await D.saveSession(uid, { state: null, data: photoData });
+      return send(chat, T.pickPlantForDiagnosis, await diagPlantRows(uid));
+    }
+    await D.saveSession(uid, { state: null, data: photoData });
     return send(chat, T.photoWhat, [
       [b("добавить в коллекцию", "ph:add", "success")],
       [b("просто узнать, что это", "ph:id", "primary")],
@@ -141,6 +151,12 @@ async function onMessage(u: User, chat: number, msg: any) {
       case "/weather": return weatherReport(u, chat);
       case "/settings": return settings(u, chat);
       case "/icons": return iconsMenu(chat);
+      case "/identify":
+        await D.saveSession(uid, { state: "await_id_photo", data: {} });
+        return send(chat, T.idAsk);
+      case "/doctor":
+        await D.saveSession(uid, { state: "await_doc_photo", data: {} });
+        return send(chat, T.docAsk);
     }
   }
 
@@ -180,29 +196,13 @@ async function onCallback(u: User, chat: number, cb: any) {
     case "ph": {
       if (!s.data.photo) { await answer(cb.id, "фото потерялось, пришли ещё раз"); return; }
       await answer(cb.id);
-      if (a === "diag") {
-        const ps = await D.plants(uid);
-        const rows: Keyboard = ps.map((p) => [b(nameOf(p), `dgp:${p.id}`)]);
-        rows.push([b("его нет в коллекции", "dgp:none")]);
-        return edit(chat, mid, T.pickPlantForDiagnosis, rows);
-      }
-      await edit(chat, mid, T.identifying);
-      await typing(chat);
-      const img = await photoOf(s.data.photo);
-      let candidates: C.Candidate[] = [];
-      let isPlant = true;
-      if (plantnetEnabled) candidates = await plantnetIdentify(img.bytes, img.mime).catch(() => []);
-      if (!candidates.length) ({ isPlant, candidates } = await C.identify(img));
-      if (!isPlant || !candidates.length) return edit(chat, mid, T.notAPlant);
-      await D.saveSession(uid, { data: { ...s.data, candidates } });
-
-      if (a === "id") {
-        const lines = candidates.map((c, i) =>
-          `${i === 0 ? "<b>" : ""}${esc(c.common)}${i === 0 ? "</b>" : ""} · <i>${esc(c.latin)}</i> · ${Math.round(c.confidence * 100)}%`
-        );
-        return edit(chat, mid, lines.join("\n"), [[b("добавить в коллекцию", "ph2:add", "success")]]);
-      }
-      return edit(chat, mid, T.pickCandidate, candidateButtons(candidates));
+      if (a === "diag") return edit(chat, mid, T.pickPlantForDiagnosis, await diagPlantRows(uid));
+      return identifyPhoto(u, chat, s.data, a === "id" ? "id" : "add", mid);
+    }
+    case "noadd": {
+      await answer(cb.id, "хорошо, в сад не добавляю");
+      await D.saveSession(uid, { state: null, data: {} });
+      return editKeyboard(chat, mid, []);
     }
     case "ph2": {
       await answer(cb.id);
@@ -433,6 +433,37 @@ async function onCallback(u: User, chat: number, cb: any) {
 }
 
 // ---------- добавление растения
+
+// определить растение по фото. id: просто узнать (и по желанию добавить), add: сразу к добавлению в сад
+async function identifyPhoto(u: User, chat: number, data: Record<string, any>, mode: "id" | "add", mid: number) {
+  await edit(chat, mid, T.identifying);
+  await typing(chat);
+  const img = await photoOf(data.photo);
+  let candidates: C.Candidate[] = [];
+  let isPlant = true;
+  if (plantnetEnabled) candidates = await plantnetIdentify(img.bytes, img.mime).catch(() => []);
+  if (!candidates.length) ({ isPlant, candidates } = await C.identify(img));
+  if (!isPlant || !candidates.length) return edit(chat, mid, T.notAPlant);
+  await D.saveSession(u.telegram_id, { state: null, data: { ...data, candidates } });
+
+  if (mode === "id") {
+    const lines = candidates.map((c, i) =>
+      `${i === 0 ? "<b>" : ""}${esc(c.common)}${i === 0 ? "</b>" : ""} · <i>${esc(c.latin)}</i> · ${Math.round(c.confidence * 100)}%`
+    );
+    // сразу варианты: выбрать верный и добавить, написать свой или не добавлять вовсе
+    const k = candidateButtons(candidates);
+    k.push([b("не добавлять в сад", "noadd")]);
+    return edit(chat, mid, `${lines.join("\n")}\n\n${T.idAddHint}`, k);
+  }
+  return edit(chat, mid, T.pickCandidate, candidateButtons(candidates));
+}
+
+async function diagPlantRows(uid: number): Promise<Keyboard> {
+  const ps = await D.plants(uid);
+  const rows: Keyboard = ps.map((p) => [b(nameOf(p), `dgp:${p.id}`)]);
+  rows.push([b("его нет в коллекции", "dgp:none")]);
+  return rows;
+}
 
 function candidateButtons(cs: C.Candidate[]): Keyboard {
   const rows: Keyboard = cs.map((c, i) => [b(`${c.common} · ${Math.round(c.confidence * 100)}%`, `cand:${i}`, i === 0 ? "primary" : undefined)]);

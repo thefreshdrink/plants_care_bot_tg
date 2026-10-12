@@ -49,6 +49,8 @@ export const T = {
     "/today · что сделать сегодня\n" +
     "/week · полив на неделю\n" +
     "/plants · мой сад\n" +
+    "/identify · узнать растение по фото\n" +
+    "/doctor · что с растением\n" +
     "/weather · погода для сада\n" +
     "/settings · время утреннего сообщения\n" +
     "/icons · иконки на кнопках\n\n" +
@@ -58,6 +60,9 @@ export const T = {
   identifying: "смотрю…",
   notAPlant: "не вижу на фото растения. попробуй крупнее, при дневном свете.",
   pickCandidate: "похоже на это. какое верно?",
+  idAsk: "пришли фото растения, скажу, что это. добавлять в сад или нет, решишь потом.",
+  idAddHint: "добавить в сад? выбери верный вариант. если всё мимо, напиши название сама.",
+  docAsk: "пришли фото, где видно проблему. можно добавить вопрос в подпись. потом выберешь, какое это растение из сада.",
   typeNameInstead: "напиши название сама (можно по-русски или латынью).",
   askLocation: (n: string) => `<b>${esc(n)}</b>\n\nгде оно живёт?`,
   askNickname: "как его звать? напиши имя или нажми «без имени».",
@@ -116,6 +121,8 @@ export const COMMANDS: { command: string; description: string }[] = [
   { command: "today", description: "что сделать сегодня" },
   { command: "week", description: "полив на неделю" },
   { command: "plants", description: "мой сад" },
+  { command: "identify", description: "узнать растение по фото" },
+  { command: "doctor", description: "что с растением" },
   { command: "weather", description: "погода для сада" },
   { command: "settings", description: "время утреннего сообщения" },
   { command: "icons", description: "иконки на кнопках" },
