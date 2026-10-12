@@ -748,33 +748,24 @@ async function list(u: User, chat: number, editMid?: number) {
   const { ps, rows, names, inRoom, dueIn } = await garden(u);
   if (!ps.length) return send(chat, T.emptyCollection);
 
-  // первой идёт комната, которая ждёт дольше всех
-  const urgency = (n: string) => Math.min(...inRoom(n).map((r) => r.st.daysLeft));
-  const order = [...names].sort((a, b) => urgency(a) - urgency(b));
-  const first = order[0];
-  const rest = order.slice(1);
+  // сад как справочник: сначала все комнаты, растения внутри комнаты
   const totalDue = rows.filter((r) => r.st.due).length;
-
   const out = [T.gardenTitle(ps.length), totalDue ? T.waterToday(totalDue) : T.nothingToday, ""];
-  out.push(`<b>${esc(first)}</b>${dueIn(first) ? ` · ждут ${dueIn(first)}` : ""}`);
-  for (const r of inRoom(first)) out.push(plantLine(r));
-  if (rest.length) {
-    out.push("", `<i>${T.roomRest}: ${rest.map((n) => `${esc(n)}${dueIn(n) ? ` ${dueIn(n)}` : ""}`).join(" · ")}</i>`);
+  for (const n of names) {
+    const cnt = inRoom(n).length;
+    out.push(`<b>${esc(n)}</b> · ${cnt} ${plural(cnt, "растение", "растения", "растений")}${dueIn(n) ? ` · ждут ${dueIn(n)}` : ""}`);
   }
 
   const k: Keyboard = [];
-  if (dueIn(first)) {
-    k.push([b(`полито: ${first} · ${dueIn(first)}`, `wrv:${names.indexOf(first)}:g`, "success", "water")]);
-  }
   const roomBtn = (n: string) =>
     b(dueIn(n) ? `${n} · ${dueIn(n)}` : n, `rmv:${names.indexOf(n)}`, dueIn(n) ? "success" : undefined);
-  for (let i = 0; i < rest.length; i += 2) k.push(rest.slice(i, i + 2).map(roomBtn));
+  for (let i = 0; i < names.length; i += 2) k.push(names.slice(i, i + 2).map(roomBtn));
   k.push([b("неделя", "wk:0", "primary", "week")]);
 
   return showScreen(chat, out.join("\n"), k, editMid, "garden");
 }
 
-// ---------- одна комната: обход сада по кругу
+// ---------- одна комната
 
 async function roomScreen(u: User, chat: number, idx: number, editMid?: number) {
   const { names, inRoom } = await garden(u);
@@ -798,15 +789,7 @@ async function roomScreen(u: User, chat: number, idx: number, editMid?: number) 
     k.push(rows.slice(i, i + 2).map(({ p, st }) => b(nameOf(p), `p:${p.id}`, st.due ? "success" : undefined)));
   }
 
-  // следующая комната по кругу, где ещё ждут: обход квартиры за один проход
-  let next = -1;
-  for (let step = 1; step < names.length; step++) {
-    const j = (idx + step) % names.length;
-    if (inRoom(names[j]).some((r) => r.st.due)) { next = j; break; }
-  }
-  const nav = [b("← сад", "list", undefined, "list")];
-  if (next >= 0) nav.push(b(`${names[next]} →`, `rmv:${next}`, "primary"));
-  k.push(nav);
+  k.push([b("← сад", "list", undefined, "list")]);
 
   return showScreen(chat, out.join("\n"), k, editMid, "room");
 }
