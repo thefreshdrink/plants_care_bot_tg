@@ -79,7 +79,9 @@ export async function handleUpdate(update: any) {
   }
 
   setIcons(await D.icons(u.telegram_id).catch(() => ({})));
-  syncCommands(COMMANDS);
+  // меню команд обновляем параллельно с ответом, но дожидаемся в конце:
+  // иначе функция может уснуть раньше, чем телеграм его примет
+  const commands = syncCommands(COMMANDS);
   try {
     if (cb) await onCallback(u, chat, cb);
     else if (msg) await onMessage(u, chat, msg);
@@ -88,6 +90,7 @@ export async function handleUpdate(update: any) {
     if (cb) await answer(cb.id);
     await send(chat, T.error).catch(() => {});
   }
+  await commands;
 }
 
 // ---------- сообщения
@@ -303,7 +306,7 @@ async function onCallback(u: User, chat: number, cb: any) {
       await answer(cb.id, `полито: ${name}`);
       return arg2 === "r" ? roomScreen(u, chat, Number(a), mid) : list(u, chat, mid);
     }
-    case "p": await answer(cb.id); return card(u, chat, a);
+    case "p": await answer(cb.id); return card(u, chat, a, mid);
     case "hist": await answer(cb.id); return history(u, chat, a, mid);
     case "hn": {
       await answer(cb.id);
@@ -986,7 +989,7 @@ async function freeChat(u: User, chat: number, text: string, history: any[]) {
   }).join("\n") || "коллекция пока пустая";
   const wx = w.days.slice(i, i + 4)
     .map((d) => `${d.date}: ${Math.round(d.tmax)}/${Math.round(d.tmin)}°, ${sky(d.code)}, дождь ${d.rain} мм`).join("\n");
-  const ctx = `сегодня ${w.today}.\n\nколлекция:\n${plantsCtx}\n\nпрогноз:\n${wx}`;
+  const ctx = `сегодня ${w.today}.\n\nколлекция:\n${plantsCtx}\n\nпрогноз:\n${wx}\n\n${T.botGuide}`;
 
   const msgs = [...history.slice(-10), { role: "user", content: text }];
   const reply = await C.chat(msgs, ctx, streamer(chat));
