@@ -718,7 +718,7 @@ async function rainWater(u: User): Promise<Plant[]> {
   return wet;
 }
 
-// ---------- сад: комнаты, самая срочная раскрыта
+// ---------- сад: список комнат
 
 type Row = { p: Plant; st: WaterStatus };
 
