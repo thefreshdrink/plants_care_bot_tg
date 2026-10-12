@@ -113,6 +113,14 @@ export async function roomLocation(uid: number, room: string): Promise<Plant["lo
   return Object.entries(count).sort((a, b) => b[1] - a[1])[0][0] as Plant["location"];
 }
 
+export type PlantEvent = { kind: string; note: string | null; created_at: string };
+
+// последние события растения, новые сверху
+export async function plantEvents(uid: number, plantId: string, limit = 15): Promise<PlantEvent[]> {
+  return (check(await db.from("events").select("kind, note, created_at").eq("user_id", uid).eq("plant_id", plantId)
+    .order("created_at", { ascending: false }).limit(limit)) ?? []) as PlantEvent[];
+}
+
 // дождь, отмеченный кнопкой, в неделе тоже считается поливом
 export async function waterEvents(uid: number, sinceIso: string): Promise<{ plant_id: string; created_at: string }[]> {
   const { data } = await db.from("events").select("plant_id, created_at").eq("user_id", uid).in("kind", ["water", "rain"]).gte("created_at", sinceIso);

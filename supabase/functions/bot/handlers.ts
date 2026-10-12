@@ -171,6 +171,10 @@ async function onMessage(u: User, chat: number, msg: any) {
       return card(u, chat, s.data.plant_id);
     case "await_nickname":
       return askLastWatered(u, chat, { ...s.data, nickname: text.slice(0, 40) });
+    case "await_note":
+      await D.logEvent(uid, s.data.plant_id, "note", text.slice(0, 500));
+      await D.saveSession(uid, { state: null, data: {} });
+      return history(u, chat, s.data.plant_id);
     case "await_rename":
       await D.updatePlant(uid, s.data.plant_id, { nickname: text.slice(0, 40) });
       await D.saveSession(uid, { state: null, data: {} });
@@ -298,6 +302,20 @@ async function onCallback(u: User, chat: number, cb: any) {
       return arg2 === "r" ? roomScreen(u, chat, Number(a), mid) : list(u, chat, mid);
     }
     case "p": await answer(cb.id); return card(u, chat, a);
+    case "hist": await answer(cb.id); return history(u, chat, a, mid);
+    case "hn": {
+      await answer(cb.id);
+      await D.saveSession(uid, { state: "await_note", data: { plant_id: a } });
+      return edit(chat, mid, T.noteAsk);
+    }
+    case "hq": {
+      // быстрые заметки одной кнопкой
+      const note = QUICK_NOTES[Number(arg2)];
+      if (!note) return answer(cb.id);
+      await D.logEvent(uid, a, "note", note);
+      await answer(cb.id, `записала: ${note}`);
+      return history(u, chat, a, mid);
+    }
     case "care": await answer(cb.id); return careText(u, chat, a);
     case "pho": {
       await answer(cb.id);
@@ -586,7 +604,11 @@ async function card(u: User, chat: number, id: string, editMid?: number) {
   if (getsRain(p.location)) k.push([b("был дождь", `rain:c:${id}`, undefined, "rain")]);
   // фото стоит крупно над текстом, а если его нет, предлагаем добавить
   if (!p.photo_file_id) k.push([b("добавить фото", `nph:${id}`, "primary", "photo")]);
-  k.push([b("ещё", `ed:${id}`, undefined, "edit"), b("весь сад", "list", undefined, "list")]);
+  k.push([
+    b("история", `hist:${id}`, undefined, "history"),
+    b("ещё", `ed:${id}`, undefined, "edit"),
+    b("весь сад", "list", undefined, "list"),
+  ]);
 
   const pv = await photoPreview(u, p);
   return showScreen(chat, lines.join("\n"), k, editMid, "card", pv ? { ...pv, above: true, large: true } : undefined);
@@ -629,6 +651,41 @@ async function careText(u: User, chat: number, id: string) {
   const rich = sections.map(([t, v, open]) => det(t, v, open)).join("");
   const plain = sections.map(([t, v]) => block(t, v)).join("\n");
   return sendRich(chat, rich, plain, [[b("← к растению", `p:${id}`, "primary")]]);
+}
+
+// ---------- история растения
+
+const QUICK_NOTES = ["пересажено", "подрезано", "новый лист", "цветёт"];
+
+const EVENT_LABEL: Record<string, string> = {
+  water: "полито", rain: "дождь", feed: "удобрение", photo: "фото", diagnosis: "диагноз", note: "",
+};
+
+async function history(u: User, chat: number, id: string, editMid?: number) {
+  const p = await D.plant(u.telegram_id, id);
+  if (!p) return send(chat, "такого растения нет в коллекции.");
+  const evs = await D.plantEvents(u.telegram_id, id);
+  const line = (e: D.PlantEvent) => {
+    const day = ruDate(localDate(u.tz, new Date(e.created_at)));
+    if (e.kind === "note") return `${day} · <b>${esc(e.note ?? "")}</b>`;
+    if (e.kind === "photo" && e.note === "добавлено") return `${day} · добавлено в сад`;
+    if (e.kind === "diagnosis") return `${day} · диагноз: <i>${esc((e.note ?? "").split("\n")[0].slice(0, 80))}</i>`;
+    return `${day} · ${EVENT_LABEL[e.kind] ?? e.kind}`;
+  };
+  const text = [
+    `<b>${esc(nameOf(p))}</b> · история`,
+    "",
+    evs.length ? evs.map(line).join("\n") : T.historyEmpty,
+  ].join("\n");
+  const quick: Keyboard = [];
+  for (let i = 0; i < QUICK_NOTES.length; i += 2) {
+    quick.push(QUICK_NOTES.slice(i, i + 2).map((n, j) => b(n, `hq:${id}:${i + j}`)));
+  }
+  return showScreen(chat, text, [
+    [b("написать заметку", `hn:${id}`, "primary", "note")],
+    ...quick,
+    [b("← к растению", `p:${id}`)],
+  ], editMid, "history");
 }
 
 // подкормка это удобрение в воде, поэтому отдельно она не приходит:
