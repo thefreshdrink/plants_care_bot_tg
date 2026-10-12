@@ -66,6 +66,7 @@ export const T = {
   emptyCollection: "в саду пока пусто. пришли фото растения, и начнём.",
   watered: (n: string) => `полито: ${n}`,
   fed: (n: string) => `подкормлено: ${n}`,
+  wateredFed: (n: string) => `полито с удобрением: ${n}`,
   diagnosePhoto: (n: string) => `пришли фото, где видно проблему у «${esc(n)}». можно добавить вопрос в подпись.`,
   diagnosing: "разглядываю…",
   pickPlantForDiagnosis: "у какого растения проблема?",
@@ -95,7 +96,6 @@ export const T = {
 // какие иконки можно настроить: ключ совпадает с последним аргументом b() у кнопки
 export const ICON_KEYS: { key: string; label: string }[] = [
   { key: "water", label: "полито" },
-  { key: "feed", label: "подкормлено" },
   { key: "snooze", label: "не сегодня" },
   { key: "rain", label: "был дождь" },
   { key: "care", label: "инфо" },

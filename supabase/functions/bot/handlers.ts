@@ -309,8 +309,8 @@ async function onCallback(u: User, chat: number, cb: any) {
     case "w": case "wd": {
       const p = await D.plant(uid, a);
       if (!p) return answer(cb.id);
-      await water(u, p);
-      await answer(cb.id, T.watered(nameOf(p)));
+      const fed = await water(u, p);
+      await answer(cb.id, fed ? T.wateredFed(nameOf(p)) : T.watered(nameOf(p)));
       if (cmd === "w") return card(u, chat, a, mid);
       return digestUpdateKeyboard(cb, chat, mid, data, []);
     }
@@ -543,15 +543,11 @@ async function card(u: User, chat: number, id: string, editMid?: number) {
   if (st.rainedOn) lines.push(`дождь ${ruDate(st.rainedOn)} засчитан как полив`);
   lines.push(`последний полив: ${ruDate(localDate(u.tz, new Date(p.last_watered_at)))}`);
 
-  const fedDue = !!p.feed_every_days && feedDue(
-    p, w.today,
-    p.last_fed_at ? localDate(u.tz, new Date(p.last_fed_at)) : null,
-    localDate(u.tz, new Date(p.created_at)),
-  );
+  const fedDue = needsFeed(u, p);
+  if (fedDue) lines.push(st.due ? "сегодня полить с удобрением" : "удобрение: со следующим поливом");
   const k: Keyboard = [];
-  if (fedDue) k.push([b("подкормлено", `f:${id}`, "success", "feed")]);
   k.push([
-    b("полито", `w:${id}`, "success", "water"),
+    b(fedDue ? "полито с удобрением" : "полито", `w:${id}`, "success", "water"),
     b("не сегодня", `snz:${id}`, undefined, "snooze"),
     b("инфо", `care:${id}`, undefined, "care"),
   ]);
@@ -604,9 +600,24 @@ async function careText(u: User, chat: number, id: string) {
   return sendRich(chat, rich, plain, [[b("← к растению", `p:${id}`, "primary")]]);
 }
 
-async function water(u: User, p: Plant, kind: "water" | "rain" = "water") {
-  await D.updatePlant(u.telegram_id, p.id, { last_watered_at: new Date().toISOString(), snoozed_until: null });
+// подкормка это удобрение в воде, поэтому отдельно она не приходит:
+// если растению пора, она засчитывается вместе с поливом. дождь не подкармливает.
+function needsFeed(u: User, p: Plant): boolean {
+  return feedDue(
+    p, localDate(u.tz),
+    p.last_fed_at ? localDate(u.tz, new Date(p.last_fed_at)) : null,
+    localDate(u.tz, new Date(p.created_at)),
+  );
+}
+
+// возвращает true, если вместе с поливом засчитана подкормка
+async function water(u: User, p: Plant, kind: "water" | "rain" = "water"): Promise<boolean> {
+  const now = new Date().toISOString();
+  const fed = kind === "water" && needsFeed(u, p);
+  await D.updatePlant(u.telegram_id, p.id, { last_watered_at: now, snoozed_until: null, ...(fed ? { last_fed_at: now } : {}) });
   await D.logEvent(u.telegram_id, p.id, kind);
+  if (fed) await D.logEvent(u.telegram_id, p.id, "feed");
+  return fed;
 }
 
 // дождь поливает всех, кто под открытым небом
@@ -754,12 +765,11 @@ export async function digest(u: User, chat: number, manual: boolean): Promise<bo
   const today = w.days.find((d) => d.date === w.today);
   const rows = ps.map((p) => ({ p, st: status(u, p, w) }));
   const due = rows.filter((r) => r.st.due);
-  const feed = ps.filter((p) =>
-    feedDue(p, w.today, p.last_fed_at ? localDate(u.tz, new Date(p.last_fed_at)) : null, localDate(u.tz, new Date(p.created_at)))
-  );
+  const feed = new Set(ps.filter((p) => needsFeed(u, p)).map((p) => p.id));
   const alerts = weatherAlerts(w, ps, nameOf);
 
-  if (!manual && !due.length && !feed.length && !alerts.length) return false; // тихий день, не пишем
+  // подкормка без полива не повод писать: она подождёт ближайшего полива
+  if (!manual && !due.length && !alerts.length) return false; // тихий день, не пишем
 
   const wd = WEEKDAYS[new Date(w.today + "T12:00:00Z").getUTCDay()];
   const out: string[] = [`<b>${wd}, ${ruDate(w.today)}</b>`];
@@ -776,9 +786,10 @@ export async function digest(u: User, chat: number, manual: boolean): Promise<bo
       out.push(`<i>${esc(room)}</i>`);
       for (const { p, st } of rows) {
         let note = "";
-        if (st.rainExpectedToday) note = " · обещают дождь, можно подождать";
-        else if (st.reason === "heat") note = " · раньше срока из-за жары";
-        else if (st.reason === "overdue") note = " · давно не поливали";
+        if (feed.has(p.id)) note = " · с удобрением";
+        if (st.rainExpectedToday) note += " · обещают дождь, можно подождать";
+        else if (st.reason === "heat") note += " · раньше срока из-за жары";
+        else if (st.reason === "overdue") note += " · давно не поливали";
         out.push(`  ${esc(nameOf(p))}${note ? `<i>${note}</i>` : ""}`);
       }
     }
@@ -786,10 +797,6 @@ export async function digest(u: User, chat: number, manual: boolean): Promise<bo
     const next = rows.sort((a, b) => a.st.daysLeft - b.st.daysLeft)[0];
     out.push("", T.nothingToday);
     if (next) out.push(`<i>следующий: ${esc(nameOf(next.p))}, ${whenWater(next.st.daysLeft, false).replace("полив ", "")}</i>`);
-  }
-
-  if (feed.length) {
-    out.push("", "<b>подкормить</b>", ...feed.map((p) => esc(nameOf(p))));
   }
 
   for (const a of alerts) {
@@ -802,11 +809,10 @@ export async function digest(u: User, chat: number, manual: boolean): Promise<bo
     if (rows.length > 1 && new TextEncoder().encode(`wr:${room}`).length <= 64) {
       k.push([b(`полито: ${room} · ${rows.length}`, `wr:${room}`, "success", "water")]);
     }
-    for (const { p } of rows) k.push([b(`полито: ${nameOf(p)}`, `wd:${p.id}`, undefined, "water")]);
+    for (const { p } of rows) k.push([b(`полито: ${nameOf(p)}${feed.has(p.id) ? " + удобрение" : ""}`, `wd:${p.id}`, undefined, "water")]);
   }
   if (due.length > 1) k.push([b("всё полито", "wall", "success", "water")]);
   if (ps.some((p) => getsRain(p.location))) k.push([b("был дождь", "rain:d", undefined, "rain")]);
-  for (const p of feed) k.push([b(`подкормлено: ${nameOf(p)}`, `fd:${p.id}`, undefined, "feed")]);
 
   await send(chat, out.join("\n"), k.length ? k : undefined);
   return true;
