@@ -562,7 +562,7 @@ async function careText(u: User, chat: number, id: string) {
   const block = (title: string, v?: string) => (v ? `<b>${title}</b>\n${esc(v)}\n` : "");
   const sections: [string, string | undefined, boolean?][] = [
     ["полив", `${c.water_how ?? ""}\n${interval}`, true],
-    ["свет", c.light],
+    ["где поставить", c.light],
     ["подкормка", c.feed_what],
     ["почва", c.soil],
     ["температура", `переносит до ${p.cold_min_c ?? "?"}°${p.heat_sensitive ? ", в сильную жару нужна тень" : ""}`],
