@@ -93,6 +93,11 @@ export async function icons(uid: number): Promise<Record<string, string>> {
   return Object.fromEntries((data ?? []).map((r: any) => [r.key, r.custom_emoji_id]));
 }
 
+export async function setIcon(uid: number, key: string, id: string | null) {
+  if (id) check(await db.from("icons").upsert({ user_id: uid, key, custom_emoji_id: id }));
+  else check(await db.from("icons").delete().eq("user_id", uid).eq("key", key));
+}
+
 // комнаты в порядке добавления растений
 export async function rooms(uid: number): Promise<string[]> {
   const ps = await plants(uid);
@@ -106,6 +111,14 @@ export async function roomLocation(uid: number, room: string): Promise<Plant["lo
   const count: Record<string, number> = {};
   for (const p of ps) count[p.location] = (count[p.location] ?? 0) + 1;
   return Object.entries(count).sort((a, b) => b[1] - a[1])[0][0] as Plant["location"];
+}
+
+export type PlantEvent = { kind: string; note: string | null; created_at: string };
+
+// последние события растения, новые сверху
+export async function plantEvents(uid: number, plantId: string, limit = 15): Promise<PlantEvent[]> {
+  return (check(await db.from("events").select("kind, note, created_at").eq("user_id", uid).eq("plant_id", plantId)
+    .order("created_at", { ascending: false }).limit(limit)) ?? []) as PlantEvent[];
 }
 
 // дождь, отмеченный кнопкой, в неделе тоже считается поливом
