@@ -59,6 +59,9 @@ async function photoOf(fileId: string) {
   return { bytes, mime, base64: tgm.toBase64(bytes) };
 }
 
+// строка «куда дальше» для экранов, у которых своих кнопок нет
+const homeNav = (): Keyboard => [[b("сегодня", "today", undefined, "today"), b("сад", "list", undefined, "list")]];
+
 // ---------- точка входа для апдейтов телеграма
 
 export async function handleUpdate(update: any) {
@@ -134,8 +137,7 @@ async function onMessage(u: User, chat: number, msg: any) {
     await D.saveSession(uid, { state: null, data: {} });
     setIcons(await D.icons(uid));
     const label = ICON_KEYS.find((k) => k.key === s.data.key)?.label ?? "";
-    await send(chat, T.iconSaved(label));
-    return iconsMenu(chat);
+    return iconsMenu(chat, T.iconSaved(label));
   }
 
   if (!text) return;
@@ -269,7 +271,7 @@ async function onCallback(u: User, chat: number, cb: any) {
         return send(chat, T.iconsCleared);
       }
       await D.saveSession(uid, { state: "await_icon", data: { key: a } });
-      return send(chat, T.iconAsk(ICON_KEYS.find((k) => k.key === a)?.label ?? a));
+      return edit(chat, mid, T.iconAsk(ICON_KEYS.find((k) => k.key === a)?.label ?? a));
     }
     case "wr": {
       const room = data.slice(3);
@@ -344,7 +346,8 @@ async function onCallback(u: User, chat: number, cb: any) {
       const wet = await rainWater(u);
       await answer(cb.id, "засчитала дождь как полив");
       if (a === "c") return card(u, chat, arg2, mid);
-      return digestUpdateKeyboard(cb, chat, mid, data, wet.map((p) => `wd:${p.id}`));
+      const wetRooms = [...new Set(wet.map((p) => `wr:${roomOf(p)}`))];
+      return digestUpdateKeyboard(cb, chat, mid, data, [...wet.map((p) => `wd:${p.id}`), ...wetRooms]);
     }
     case "f": case "fd": {
       const p = await D.plant(uid, a);
@@ -444,7 +447,7 @@ async function onCallback(u: User, chat: number, cb: any) {
       const h = Number(a);
       await D.db.from("users").update({ digest_hour: h }).eq("telegram_id", uid);
       await answer(cb.id);
-      return edit(chat, mid, T.settingsSaved(h));
+      return edit(chat, mid, T.settingsSaved(h), homeNav());
     }
   }
   await answer(cb.id);
@@ -927,7 +930,7 @@ async function weatherReport(u: User, chat: number) {
     `дождь за неделю: ${Math.round(rain7)} мм`,
     w.dustToday != null ? `пыль: ${Math.round(w.dustToday)} мкг/м³${w.dustToday >= 150 ? " · сильно" : ""}` : null,
   ].filter((x) => x !== null).join("\n");
-  return send(chat, text);
+  return send(chat, text, homeNav());
 }
 
 // ---------- диагностика
@@ -1082,11 +1085,11 @@ async function week(u: User, chat: number, offset: number, editMid?: number, mod
 
 // ---------- иконки кнопок
 
-async function iconsMenu(chat: number) {
+async function iconsMenu(chat: number, head?: string) {
   const k: Keyboard = [];
   for (let i = 0; i < ICON_KEYS.length; i += 3) {
     k.push(ICON_KEYS.slice(i, i + 3).map((x) => b(x.label, `ic:${x.key}`, undefined, x.key)));
   }
   k.push([b("убрать все иконки", "ic:clear", "danger")]);
-  return send(chat, T.iconsIntro, k);
+  return send(chat, head ? `${head}\n\n${T.iconsIntro}` : T.iconsIntro, k);
 }
