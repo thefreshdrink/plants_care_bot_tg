@@ -10,9 +10,10 @@ export type Keyboard = Button[][];
 let ICONS: Record<string, string> = {};
 export const setIcons = (m: Record<string, string>) => { ICONS = m; };
 
-// кнопка: текст, действие, цвет и ключ иконки
-export function b(text: string, data: string, style?: Style, icon?: string): Button {
-  const btn: Button = { text, callback_data: data };
+// кнопка: текст, действие, цвет и ключ иконки. short — текст, когда иконка
+// стоит и сама говорит, что делает кнопка (длинные надписи телеграм обрезает)
+export function b(text: string, data: string, style?: Style, icon?: string, short?: string): Button {
+  const btn: Button = { text: short && icon && ICONS[icon] ? short : text, callback_data: data };
   if (style) btn.style = style;
   if (icon && ICONS[icon]) btn.icon_custom_emoji_id = ICONS[icon];
   return btn;

@@ -800,13 +800,13 @@ export async function digest(u: User, chat: number, manual: boolean): Promise<bo
   const k: Keyboard = [];
   for (const [room, rows] of byRoom(due)) {
     if (rows.length > 1 && new TextEncoder().encode(`wr:${room}`).length <= 64) {
-      k.push([b(`полито: ${room} · ${rows.length}`, `wr:${room}`, "success", "water")]);
+      k.push([b(`полито: ${room} · ${rows.length}`, `wr:${room}`, "success", "water", `${room} · ${rows.length}`)]);
     }
-    for (const { p } of rows) k.push([b(`полито: ${nameOf(p)}`, `wd:${p.id}`, undefined, "water")]);
+    for (const { p } of rows) k.push([b(`полито: ${nameOf(p)}`, `wd:${p.id}`, undefined, "water", nameOf(p))]);
   }
   if (due.length > 1) k.push([b("всё полито", "wall", "success", "water")]);
   if (ps.some((p) => getsRain(p.location))) k.push([b("был дождь", "rain:d", undefined, "rain")]);
-  for (const p of feed) k.push([b(`подкормлено: ${nameOf(p)}`, `fd:${p.id}`, undefined, "feed")]);
+  for (const p of feed) k.push([b(`подкормлено: ${nameOf(p)}`, `fd:${p.id}`, undefined, "feed", nameOf(p))]);
 
   await send(chat, out.join("\n"), k.length ? k : undefined);
   return true;
