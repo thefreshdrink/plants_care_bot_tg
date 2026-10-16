@@ -72,16 +72,26 @@ async function structured<T>(system: string, content: any[], name: string, schem
 
 export type Candidate = { latin: string; common: string; confidence: number };
 
-export async function identify(img: Img): Promise<{ isPlant: boolean; candidates: Candidate[] }> {
-  const r = await structured<{ is_plant: boolean; candidates: Candidate[] }>(
-    "ты ботаник. определи растение на фото. дай до 3 вариантов, самый вероятный первым. " +
+export async function identify(img: Img, caption?: string | null): Promise<{ isPlant: boolean; candidates: Candidate[] }> {
+  const r = await structured<{ traits: string; is_plant: boolean; candidates: Candidate[] }>(
+    "ты ботаник. определи растение на фото. фото сделано на кипре (средиземноморье): там много суккулентов, " +
+      "агав, алоэ, кактусов, цитрусовых, бугенвиллей и прочих растений тёплого климата, дома и на улице.\n" +
+      "сначала в traits опиши, что реально видно: форма роста, листья (форма, толщина, жёсткость, край, зубцы, шип на конце), " +
+      "цвет и налёт, цветы или плоды, размер. потом сравни с похожими видами, которые легко спутать " +
+      "(например, агава и алоэ: у агавы жёсткий волокнистый лист с острым концевым шипом, у алоэ мясистый лист с гелем " +
+      "и мягкими зубчиками), и только после этого назови виды.\n" +
+      "дай до 3 вариантов, самый вероятный первым. если сомневаешься между похожими, дай оба и снизь confidence. " +
       "latin: научное название без автора. common: общепринятое русское название (если нет, то латынь). " +
       "confidence: 0..1, будь честным, не завышай.",
-    [imageBlock(img), { type: "text", text: "что это за растение?" }],
+    [
+      imageBlock(img),
+      { type: "text", text: caption ? `подпись к фото: ${caption}\n\nчто это за растение?` : "что это за растение?" },
+    ],
     "report_candidates",
     {
       type: "object",
       properties: {
+        traits: { type: "string", description: "видимые признаки и сравнение с похожими видами, 2–4 предложения" },
         is_plant: { type: "boolean" },
         candidates: {
           type: "array", maxItems: 3,
@@ -92,9 +102,9 @@ export async function identify(img: Img): Promise<{ isPlant: boolean; candidates
           },
         },
       },
-      required: ["is_plant", "candidates"],
+      required: ["traits", "is_plant", "candidates"],
     },
-    600,
+    1200,
   );
   return { isPlant: r.is_plant, candidates: r.candidates ?? [] };
 }
