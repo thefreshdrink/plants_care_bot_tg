@@ -1,7 +1,7 @@
 // edge function «bot»: принимает апдейты телеграма, ежечасный крон и разовую настройку
 import { handleUpdate, digest } from "./handlers.ts";
 import * as D from "./db.ts";
-import { syncCommands, tg } from "./telegram.ts";
+import { setIcons, syncCommands, tg } from "./telegram.ts";
 import { localDate, localHour } from "./weather.ts";
 import { COMMANDS } from "./texts.ts";
 
@@ -43,6 +43,9 @@ Deno.serve(async (req) => {
       if (localHour(u.tz) !== u.digest_hour || u.last_digest_on === today) continue;
       try {
         await D.db.from("users").update({ last_digest_on: today }).eq("telegram_id", u.telegram_id);
+        // иконки кнопок — свои у каждого; без этого утренняя сводка шла с иконками
+        // того, кто писал боту последним в этом инстансе, или совсем без них
+        setIcons(await D.icons(u.telegram_id).catch(() => ({})));
         if (await digest(u, u.telegram_id, false)) sent.push(u.telegram_id);
       } catch (e) { console.error("digest", u.telegram_id, e); }
     }
