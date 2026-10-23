@@ -10,9 +10,10 @@ export type Keyboard = Button[][];
 let ICONS: Record<string, string> = {};
 export const setIcons = (m: Record<string, string>) => { ICONS = m; };
 
-// кнопка: текст, действие, цвет и ключ иконки
-export function b(text: string, data: string, style?: Style, icon?: string): Button {
-  const btn: Button = { text, callback_data: data };
+// кнопка: текст, действие, цвет и ключ иконки. short — текст, когда иконка
+// стоит и сама говорит, что делает кнопка (длинные надписи телеграм обрезает)
+export function b(text: string, data: string, style?: Style, icon?: string, short?: string): Button {
+  const btn: Button = { text: short && icon && ICONS[icon] ? short : text, callback_data: data };
   if (style) btn.style = style;
   if (icon && ICONS[icon]) btn.icon_custom_emoji_id = ICONS[icon];
   return btn;
@@ -48,12 +49,13 @@ function plainMarkup(m: any): any {
 
 const kb = (k?: Keyboard) => (k ? { reply_markup: { inline_keyboard: k } } : {});
 
-// превью ссылки: телеграм показывает картинку маленькой сбоку от текста.
-// ссылка должна вести прямо на файл: html-страницу с разметкой он не обходит, это проверено на живом боте.
-export type Preview = { url: string; above?: boolean };
+// превью ссылки: по умолчанию телеграм показывает картинку маленькой сбоку от текста,
+// с large просит показать её крупно. ссылка должна вести прямо на файл:
+// html-страницу с разметкой он не обходит, это проверено на живом боте.
+export type Preview = { url: string; above?: boolean; large?: boolean };
 const preview = (pv?: Preview) => ({
   link_preview_options: pv
-    ? { url: pv.url, prefer_small_media: true, show_above_text: !!pv.above }
+    ? { url: pv.url, ...(pv.large ? { prefer_large_media: true } : { prefer_small_media: true }), show_above_text: !!pv.above }
     : { is_disabled: true },
 });
 
