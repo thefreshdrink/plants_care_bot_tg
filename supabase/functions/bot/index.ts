@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
     return ok({ ok: true, webhook: info.url, pending: info.pending_update_count, note: "готово, иди в телеграм и нажми /start" });
   }
 
-  // 2. крон раз в час: кому пора, тому утреннее сообщение
+  // 2. крон раз в час: кому пора, тому утреннее сообщение или вечернее напоминание
   if (url.searchParams.has("cron")) {
     if (!CRON_SECRET || req.headers.get("x-cron-secret") !== CRON_SECRET) return new Response("forbidden", { status: 403 });
     const { data: users } = await D.db.from("users").select("*");
@@ -49,7 +49,18 @@ Deno.serve(async (req) => {
         if (await digest(u, u.telegram_id, false)) sent.push(u.telegram_id);
       } catch (e) { console.error("digest", u.telegram_id, e); }
     }
-    return ok({ ok: true, sent: sent.length });
+    // вечером — только то, что за день так и не полили; если всё полито, молчим
+    const evening: number[] = [];
+    for (const u of (users ?? []) as D.User[]) {
+      const today = localDate(u.tz);
+      if (u.evening_hour == null || localHour(u.tz) !== u.evening_hour || u.last_evening_on === today) continue;
+      try {
+        await D.db.from("users").update({ last_evening_on: today }).eq("telegram_id", u.telegram_id);
+        setIcons(await D.icons(u.telegram_id).catch(() => ({})));
+        if (await digest(u, u.telegram_id, false, true)) evening.push(u.telegram_id);
+      } catch (e) { console.error("evening", u.telegram_id, e); }
+    }
+    return ok({ ok: true, sent: sent.length, evening: evening.length });
   }
 
   // 3. апдейт от телеграма

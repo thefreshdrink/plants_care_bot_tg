@@ -32,8 +32,8 @@ export async function card(u: User, chat: number, id: string, editMid?: number) 
   const k: Keyboard = [];
   if (fedDue) {
     k.push([
-      b("полито с удобрением", `w:${id}`, "success", "water"),
-      b("без удобрения", `wn:${id}`, undefined, "nofeed"),
+      b("с удобрением", `w:${id}`, "success", "water"),
+      b("без", `wn:${id}`, undefined, "nofeed"),
     ]);
     k.push([b("не сегодня", `snz:${id}`, undefined, "snooze"), b("инфо", `care:${id}`, undefined, "care")]);
   } else {

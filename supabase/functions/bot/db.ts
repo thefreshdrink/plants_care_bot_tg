@@ -13,6 +13,7 @@ export const _setDb = (x: unknown) => { db = x; };
 export type User = {
   telegram_id: number; first_name: string | null; lat: number; lon: number; tz: string;
   digest_hour: number; last_digest_on: string | null;
+  evening_hour: number | null; last_evening_on: string | null;
 };
 
 export type Plant = {

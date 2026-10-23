@@ -1,4 +1,4 @@
-// утренний дайджест и его кнопки
+// утренний дайджест, вечернее напоминание и их кнопки
 import { b, editKeyboard, esc, Keyboard, send } from "../telegram.ts";
 import * as D from "../db.ts";
 import type { User } from "../db.ts";
@@ -12,7 +12,8 @@ import { needsFeed } from "./water.ts";
 
 const WEEKDAYS = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
 
-export async function digest(u: User, chat: number, manual: boolean): Promise<boolean> {
+// evening: вечернее напоминание — только то, что сегодня ещё не полито, без погоды и предупреждений
+export async function digest(u: User, chat: number, manual: boolean, evening = false): Promise<boolean> {
   const ps = await D.plants(u.telegram_id);
   if (!ps.length) {
     if (manual) await send(chat, T.emptyCollection);
@@ -23,14 +24,15 @@ export async function digest(u: User, chat: number, manual: boolean): Promise<bo
   const rows = ps.map((p) => ({ p, st: status(u, p, w) }));
   const due = rows.filter((r) => r.st.due);
   const feed = new Set(ps.filter((p) => needsFeed(u, p)).map((p) => p.id));
-  const alerts = weatherAlerts(w, ps, nameOf);
+  const alerts = evening ? [] : weatherAlerts(w, ps, nameOf);
 
   // подкормка без полива не повод писать: она подождёт ближайшего полива
   if (!manual && !due.length && !alerts.length) return false; // тихий день, не пишем
+  if (evening && !due.length) return false; // к вечеру всё полито, не пишем
 
   const wd = WEEKDAYS[new Date(w.today + "T12:00:00Z").getUTCDay()];
-  const out: string[] = [`<b>${wd}, ${ruDate(w.today)}</b>`];
-  if (today) {
+  const out: string[] = [evening ? `<b>${T.eveningHead}</b>` : `<b>${wd}, ${ruDate(w.today)}</b>`];
+  if (today && !evening) {
     out.push(
       `${Math.round(today.tmax)}° / ${Math.round(today.tmin)}° · ${sky(today.code)}` +
         (today.rain >= 1 ? ` · дождь ${Math.round(today.rain)} мм` : ""),
@@ -38,7 +40,7 @@ export async function digest(u: User, chat: number, manual: boolean): Promise<bo
   }
 
   if (due.length) {
-    out.push("", "<b>полить</b>");
+    out.push("", evening ? `<b>${T.eveningDue}</b>` : "<b>полить</b>");
     for (const [room, rows] of byRoom(due)) {
       out.push(`<i>${esc(room)}</i>`);
       for (const { p, st } of rows) {
@@ -70,7 +72,7 @@ export async function digest(u: User, chat: number, manual: boolean): Promise<bo
       // кнопка полива всегда первая в ряду: по ней digestUpdateKeyboard убирает ряд целиком
       const plus = feed.has(p.id) ? " + удобрение" : "";
       const row = [b(`полито: ${nameOf(p)}${plus}`, `wd:${p.id}`, undefined, "water", `${nameOf(p)}${plus}`)];
-      if (feed.has(p.id)) row.push(b("без удобрения", `wdn:${p.id}`, undefined, "nofeed"));
+      if (feed.has(p.id)) row.push(b("без", `wdn:${p.id}`, undefined, "nofeed"));
       k.push(row);
     }
   }
