@@ -1,0 +1,23 @@
+# проверка бота на каждый pull request в main: типы и тесты.
+# ничего не деплоит; деплой функции и миграции по-прежнему вручную.
+name: check
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: supabase/functions/bot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: deno check
+        run: deno check index.ts
+      - name: deno test
+        run: deno test

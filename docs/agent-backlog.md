@@ -129,3 +129,11 @@
   (`watering_test.ts` 9 + новые 7; assert — локальная заглушка, jsr.io
   закрыт); `deno lint` для `index.ts` чисто, у теста то же замечание про
   `jsr:` в импорте, что и у `watering_test.ts`. Не деплоилось.
+- [x] 11. Проверка бота на каждый pull request в main (тесты и типы до
+  слияния, а не после деплоя). Взято агентом 2026-10-25, когда бэклог был
+  пуст. Сделано: `.github/workflows/check.yml` — `deno check index.ts` и
+  `deno test` в `supabase/functions/bot` на GitHub. Ничего не деплоит.
+  Проверено локально: `deno check index.ts` чисто, тесты 16 из 16 (assert —
+  локальная заглушка, jsr.io из песочницы закрыт; на GitHub jsr открыт).
+  Не проверено: сам запуск на GitHub — увидим в pull request после пуша.
+  Код бота не менялся.
