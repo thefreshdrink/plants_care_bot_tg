@@ -20,5 +20,5 @@ jobs:
       - name: deno check
         run: deno check index.ts
       - name: deno test
-        # texts.ts → telegram.ts читает токен при загрузке; значение не нужно, только право читать
-        run: deno test --allow-env=TELEGRAM_BOT_TOKEN
+        # texts.ts → telegram.ts и plantnet.ts читают ключи при загрузке; значения не нужны, только право читать
+        run: deno test --allow-env=TELEGRAM_BOT_TOKEN,PLANTNET_API_KEY
