@@ -6,16 +6,9 @@ import { localDate } from "../weather.ts";
 import { addDays, projectWaterDays } from "../watering.ts";
 import { T, WEEK_SHORT } from "../texts.ts";
 import { byRoom, nameOf, status, weather } from "./common.ts";
+import { weekTitle } from "./week_title.ts";
 
 // ---------- неделя сеткой (с понедельника)
-
-const MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
-
-function weekTitle(mon: string, sun: string): string {
-  const d1 = Number(mon.slice(8)), d2 = Number(sun.slice(8));
-  const m1 = MONTHS_GEN[Number(mon.slice(5, 7)) - 1], m2 = MONTHS_GEN[Number(sun.slice(5, 7)) - 1];
-  return m1 === m2 ? `${d1}–${d2} ${m2}` : `${d1} ${m1} – ${d2} ${m2}`;
-}
 
 export async function week(u: User, chat: number, offset: number, editMid?: number, mode: "d" | "g" = "d") {
   const ps = await D.plants(u.telegram_id);
