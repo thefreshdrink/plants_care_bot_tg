@@ -5,23 +5,10 @@ import * as D from "../db.ts";
 import type { Plant, User } from "../db.ts";
 import { fetchWeather, localDate, Weather } from "../weather.ts";
 import { waterStatus, WaterStatus } from "../watering.ts";
-import { LOC_SHORT } from "../texts.ts";
 
-// ---------- утилиты
+// ---------- утилиты (имена и комнаты — в names.ts, без базы и сети, чтобы тестировать)
 
-export const nameOf = (p: Plant) => p.nickname || p.common_name || p.species || "растение";
-export const roomOf = (p: Plant) => p.room || LOC_SHORT[p.location].split(" · ")[0];
-
-// группировка по комнатам с сохранением порядка
-export function byRoom<T extends { p: Plant }>(rows: T[]): [string, T[]][] {
-  const m = new Map<string, T[]>();
-  for (const r of rows) {
-    const k = roomOf(r.p);
-    if (!m.has(k)) m.set(k, []);
-    m.get(k)!.push(r);
-  }
-  return [...m.entries()];
-}
+export { byRoom, nameOf, roomOf } from "./names.ts";
 
 // печатает ответ claude на глазах и потом отправляет его целиком
 export function streamer(chat: number) {
