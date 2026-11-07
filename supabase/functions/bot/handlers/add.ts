@@ -8,6 +8,7 @@ import { plantnetEnabled, plantnetIdentify } from "../plantnet.ts";
 import { T } from "../texts.ts";
 import { nameOf, photoOf } from "./common.ts";
 import { card } from "./card.ts";
+import { careColumns } from "./care_columns.ts";
 
 // ---------- добавление растения
 
@@ -89,16 +90,7 @@ export async function askLastWatered(u: User, chat: number, data: Record<string,
   return mid ? edit(chat, mid, text, k) : send(chat, text, k);
 }
 
-export function careColumns(c: C.Care): Partial<Plant> {
-  return {
-    common_name: c.common_name,
-    water_every_days: Math.max(0.5, Number(c.water_every_days) || 7),
-    water_winter_days: c.water_winter_days ? Number(c.water_winter_days) : null,
-    feed_every_days: c.feed_every_days ? Math.round(Number(c.feed_every_days)) : null,
-    cold_min_c: Number.isFinite(Number(c.cold_min_c)) ? Number(c.cold_min_c) : null,
-    heat_sensitive: !!c.heat_sensitive,
-  };
-}
+export { careColumns } from "./care_columns.ts";
 
 export async function finishAdd(u: User, chat: number, data: Record<string, any>, mid: number) {
   const uid = u.telegram_id;

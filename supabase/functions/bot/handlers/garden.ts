@@ -3,25 +3,13 @@ import { b, esc, Keyboard, send } from "../telegram.ts";
 import * as D from "../db.ts";
 import type { Plant, User } from "../db.ts";
 import { WaterStatus } from "../watering.ts";
-import { days, LOC_SHORT, plural, T, waterBar } from "../texts.ts";
+import { LOC_SHORT, plural, T, waterBar } from "../texts.ts";
 import { nameOf, roomOf, showScreen, status, weather } from "./common.ts";
+import { roomsOf, whenShort } from "./garden_lines.ts";
 
 // ---------- сад: список комнат
 
 type Row = { p: Plant; st: WaterStatus };
-
-// комнаты в стабильном порядке: как растения легли в базу
-function roomsOf(ps: Plant[]): string[] {
-  const out: string[] = [];
-  for (const p of ps) {
-    const r = roomOf(p);
-    if (!out.includes(r)) out.push(r);
-  }
-  return out;
-}
-
-const whenShort = (st: WaterStatus) =>
-  st.due ? "сегодня" : st.daysLeft === 1 ? "завтра" : `через ${days(st.daysLeft)}`;
 
 const plantLine = ({ p, st }: Row) => `${waterBar(st.progress)}  ${esc(nameOf(p))} · ${whenShort(st)}`;
 
