@@ -8,6 +8,8 @@ import { plantnetEnabled, plantnetIdentify } from "../plantnet.ts";
 import { T } from "../texts.ts";
 import { nameOf, photoOf } from "./common.ts";
 import { card } from "./card.ts";
+import { careColumns } from "./care_columns.ts";
+import { candidateButtons, lastWateredAt, locationButtons } from "./add_keyboards.ts";
 
 // ---------- добавление растения
 
@@ -48,18 +50,7 @@ export async function diagPlantRows(uid: number): Promise<Keyboard> {
   return rows;
 }
 
-export function candidateButtons(cs: C.Candidate[]): Keyboard {
-  const rows: Keyboard = cs.map((c, i) => [b(`${c.common} · ${Math.round(c.confidence * 100)}%`, `cand:${i}`, i === 0 ? "primary" : undefined)]);
-  rows.push([b("ни то, напишу сама", "cand:x")]);
-  return rows;
-}
-
-export function locationButtons(cb: (l: string) => string): Keyboard {
-  return [
-    [b("дом", cb("indoor")), b("балкон под крышей", cb("covered"))],
-    [b("улица · горшок", cb("outdoor_pot")), b("улица · грунт", cb("outdoor_ground"))],
-  ];
-}
+export { candidateButtons, locationButtons } from "./add_keyboards.ts";
 
 export async function askRoom(u: User, chat: number, data: Record<string, any>, mid?: number) {
   const rooms = await D.rooms(u.telegram_id);
@@ -89,16 +80,7 @@ export async function askLastWatered(u: User, chat: number, data: Record<string,
   return mid ? edit(chat, mid, text, k) : send(chat, text, k);
 }
 
-export function careColumns(c: C.Care): Partial<Plant> {
-  return {
-    common_name: c.common_name,
-    water_every_days: Math.max(0.5, Number(c.water_every_days) || 7),
-    water_winter_days: c.water_winter_days ? Number(c.water_winter_days) : null,
-    feed_every_days: c.feed_every_days ? Math.round(Number(c.feed_every_days)) : null,
-    cold_min_c: Number.isFinite(Number(c.cold_min_c)) ? Number(c.cold_min_c) : null,
-    heat_sensitive: !!c.heat_sensitive,
-  };
-}
+export { careColumns } from "./care_columns.ts";
 
 export async function finishAdd(u: User, chat: number, data: Record<string, any>, mid: number) {
   const uid = u.telegram_id;
@@ -107,9 +89,7 @@ export async function finishAdd(u: User, chat: number, data: Record<string, any>
   const { latin, common } = data.chosen;
   const care = await C.careCard(latin, common, data.location, C.locationRu(data.location));
 
-  // «не помню» = считаем, что полить надо уже сегодня
-  const ago = data.lastWateredDaysAgo === 99 ? 60 : data.lastWateredDaysAgo;
-  const lastWatered = new Date(Date.now() - ago * 86_400_000).toISOString();
+  const lastWatered = lastWateredAt(data.lastWateredDaysAgo);
 
   const { data: row, error } = await D.db.from("plants").insert({
     user_id: uid,
