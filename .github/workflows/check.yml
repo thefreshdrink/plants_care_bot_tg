@@ -22,4 +22,5 @@ jobs:
       - name: deno test
         # texts.ts → telegram.ts, plantnet.ts и claude.ts читают ключи при загрузке; значения не нужны, только право читать.
         # --allow-read=. — только для callbacks_wiring_test.ts: он читает исходники бота в этой папке
-        run: deno test --allow-env=TELEGRAM_BOT_TOKEN,PLANTNET_API_KEY,ANTHROPIC_API_KEY,CLAUDE_MODEL --allow-read=.
+        # SUPABASE_URL и SUPABASE_SERVICE_ROLE_KEY — только для handlers/water_test.ts: он ставит пустышки, чтобы db.ts загрузился без базы
+        run: deno test --allow-env=TELEGRAM_BOT_TOKEN,PLANTNET_API_KEY,ANTHROPIC_API_KEY,CLAUDE_MODEL,SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY --allow-read=.
