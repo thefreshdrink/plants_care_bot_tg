@@ -1,18 +1,10 @@
 // полив и подкормка: что засчитать и записать в историю
 import * as D from "../db.ts";
 import type { Plant, User } from "../db.ts";
-import { localDate } from "../weather.ts";
-import { feedDue, getsRain } from "../watering.ts";
+import { getsRain } from "../watering.ts";
+import { needsFeed } from "./feed_due.ts";
 
-// подкормка это удобрение в воде, поэтому отдельно она не приходит:
-// если растению пора, она засчитывается вместе с поливом. дождь не подкармливает.
-export function needsFeed(u: User, p: Plant): boolean {
-  return feedDue(
-    p, localDate(u.tz),
-    p.last_fed_at ? localDate(u.tz, new Date(p.last_fed_at)) : null,
-    localDate(u.tz, new Date(p.created_at)),
-  );
-}
+export { needsFeed };
 
 // возвращает true, если вместе с поливом засчитана подкормка.
 // noFeed: полила простой водой, хотя удобрение уже пора; оно подождёт следующего полива

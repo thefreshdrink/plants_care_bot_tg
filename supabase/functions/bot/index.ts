@@ -2,7 +2,8 @@
 import { handleUpdate, digest } from "./handlers.ts";
 import * as D from "./db.ts";
 import { setIcons, syncCommands, tg } from "./telegram.ts";
-import { localDate, localHour } from "./weather.ts";
+import { localDate } from "./weather.ts";
+import { dueEvening, dueMorning } from "./schedule.ts";
 import { COMMANDS } from "./texts.ts";
 
 const WEBHOOK_SECRET = Deno.env.get("TELEGRAM_WEBHOOK_SECRET") ?? "";
@@ -40,7 +41,7 @@ Deno.serve(async (req) => {
     const sent: number[] = [];
     for (const u of (users ?? []) as D.User[]) {
       const today = localDate(u.tz);
-      if (localHour(u.tz) !== u.digest_hour || u.last_digest_on === today) continue;
+      if (!dueMorning(u)) continue;
       try {
         await D.db.from("users").update({ last_digest_on: today }).eq("telegram_id", u.telegram_id);
         // иконки кнопок — свои у каждого; без этого утренняя сводка шла с иконками
@@ -53,7 +54,7 @@ Deno.serve(async (req) => {
     const evening: number[] = [];
     for (const u of (users ?? []) as D.User[]) {
       const today = localDate(u.tz);
-      if (u.evening_hour == null || localHour(u.tz) !== u.evening_hour || u.last_evening_on === today) continue;
+      if (!dueEvening(u)) continue;
       try {
         await D.db.from("users").update({ last_evening_on: today }).eq("telegram_id", u.telegram_id);
         setIcons(await D.icons(u.telegram_id).catch(() => ({})));
