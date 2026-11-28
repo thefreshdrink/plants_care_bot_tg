@@ -3,10 +3,12 @@ import { b, esc, Keyboard, send, sendRich } from "../telegram.ts";
 import * as D from "../db.ts";
 import type { User } from "../db.ts";
 import { localDate } from "../weather.ts";
-import { getsRain, isOutdoor } from "../watering.ts";
+import { isOutdoor } from "../watering.ts";
 import { days, LOC_SHORT, ruDate, T, waterBar, whenWater } from "../texts.ts";
 import { nameOf, photoPreview, roomOf, showScreen, status, weather } from "./common.ts";
 import { needsFeed } from "./water.ts";
+import { historyLine } from "./history_line.ts";
+import { cardKeyboard } from "./card_keyboard.ts";
 
 // ---------- карточка растения
 
@@ -29,29 +31,7 @@ export async function card(u: User, chat: number, id: string, editMid?: number) 
 
   const fedDue = needsFeed(u, p);
   if (fedDue) lines.push(st.due ? "сегодня полить с удобрением" : "удобрение: со следующим поливом");
-  const k: Keyboard = [];
-  if (fedDue) {
-    k.push([
-      b("с удобрением", `w:${id}`, "success", "water"),
-      b("без", `wn:${id}`, undefined, "nofeed"),
-    ]);
-    k.push([b("не сегодня", `snz:${id}`, undefined, "snooze"), b("инфо", `care:${id}`, undefined, "care")]);
-  } else {
-    k.push([
-      b("полито", `w:${id}`, "success", "water"),
-      b("не сегодня", `snz:${id}`, undefined, "snooze"),
-      b("инфо", `care:${id}`, undefined, "care"),
-    ]);
-  }
-  // дождь поливает только тех, кто под открытым небом: у домашних кнопка не нужна
-  if (getsRain(p.location)) k.push([b("был дождь", `rain:c:${id}`, undefined, "rain")]);
-  // фото стоит крупно над текстом, а если его нет, предлагаем добавить
-  if (!p.photo_file_id) k.push([b("добавить фото", `nph:${id}`, "primary", "photo")]);
-  k.push([
-    b("история", `hist:${id}`, undefined, "history"),
-    b("ещё", `ed:${id}`, undefined, "edit"),
-    b("весь сад", "list", undefined, "list"),
-  ]);
+  const k = cardKeyboard(id, p.location, !!p.photo_file_id, fedDue);
 
   const pv = await photoPreview(u, p);
   return showScreen(chat, lines.join("\n"), k, editMid, "card", pv ? { ...pv, above: true, large: true } : undefined);
@@ -96,25 +76,15 @@ export async function careText(u: User, chat: number, id: string) {
   return sendRich(chat, rich, plain, [[b("← к растению", `p:${id}`, "primary")]]);
 }
 
-// ---------- история растения
+// ---------- история растения (строка события — в history_line.ts, без базы, чтобы тестировать)
 
 export const QUICK_NOTES = ["пересажено", "подрезано", "новый лист", "цветёт"];
-
-const EVENT_LABEL: Record<string, string> = {
-  water: "полито", rain: "дождь", feed: "удобрение", photo: "фото", diagnosis: "диагноз", note: "",
-};
 
 export async function history(u: User, chat: number, id: string, editMid?: number) {
   const p = await D.plant(u.telegram_id, id);
   if (!p) return send(chat, "такого растения нет в коллекции.");
   const evs = await D.plantEvents(u.telegram_id, id);
-  const line = (e: D.PlantEvent) => {
-    const day = ruDate(localDate(u.tz, new Date(e.created_at)));
-    if (e.kind === "note") return `${day} · <b>${esc(e.note ?? "")}</b>`;
-    if (e.kind === "photo" && e.note === "добавлено") return `${day} · добавлено в сад`;
-    if (e.kind === "diagnosis") return `${day} · диагноз: <i>${esc((e.note ?? "").split("\n")[0].slice(0, 80))}</i>`;
-    return `${day} · ${EVENT_LABEL[e.kind] ?? e.kind}`;
-  };
+  const line = (e: D.PlantEvent) => historyLine(u.tz, e);
   const text = [
     `<b>${esc(nameOf(p))}</b> · история`,
     "",

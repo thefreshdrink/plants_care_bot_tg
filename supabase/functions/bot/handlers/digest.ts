@@ -7,6 +7,7 @@ import { getsRain, weatherAlerts } from "../watering.ts";
 import { ruDate, T, whenWater } from "../texts.ts";
 import { byRoom, nameOf, status, weather } from "./common.ts";
 import { needsFeed } from "./water.ts";
+import { keyboardAfterPress } from "./digest_keyboard.ts";
 
 // ---------- утренний дайджест
 
@@ -86,14 +87,5 @@ export async function digest(u: User, chat: number, manual: boolean, evening = f
 // убираем нажатую кнопку из дайджеста, чтобы было видно, что осталось
 export async function digestUpdateKeyboard(cb: any, chat: number, mid: number, pressed: string, alsoRemove: string[]) {
   const old: Keyboard = cb.message.reply_markup?.inline_keyboard ?? [];
-  const gone = new Set([pressed, ...alsoRemove]);
-  let rest = old.filter((row) => !gone.has(row[0]?.callback_data ?? ""));
-  // если в комнате осталось меньше двух, кнопка «вся комната» не нужна
-  rest = rest.filter((row) => {
-    const d = row[0]?.callback_data ?? "";
-    return !d.startsWith("wr:") || /· ([2-9]|\d\d)$/.test(row[0].text);
-  });
-  const left = rest.filter((row) => row[0]?.callback_data?.startsWith("wd:")).length;
-  if (left < 2) rest = rest.filter((row) => row[0]?.callback_data !== "wall");
-  return editKeyboard(chat, mid, rest);
+  return editKeyboard(chat, mid, keyboardAfterPress(old, pressed, alsoRemove));
 }
