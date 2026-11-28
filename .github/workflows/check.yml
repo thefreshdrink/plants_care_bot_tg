@@ -24,4 +24,5 @@ jobs:
         # --allow-read=. — только для callbacks_wiring_test.ts: он читает исходники бота в этой папке
         # SUPABASE_URL и SUPABASE_SERVICE_ROLE_KEY — только для handlers/water_test.ts: он ставит пустышки, чтобы db.ts загрузился без базы
         # ALLOWED_TELEGRAM_IDS — для handlers_test.ts: authorize в db.ts читает список, тест ставит свой и убирает
-        run: deno test --allow-env=TELEGRAM_BOT_TOKEN,PLANTNET_API_KEY,ANTHROPIC_API_KEY,CLAUDE_MODEL,SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY,ALLOWED_TELEGRAM_IDS --allow-read=.
+        # TELEGRAM_WEBHOOK_SECRET и CRON_SECRET — для index_test.ts: тест ставит пустышки, index.ts читает их при загрузке
+        run: deno test --allow-env=TELEGRAM_BOT_TOKEN,PLANTNET_API_KEY,ANTHROPIC_API_KEY,CLAUDE_MODEL,SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY,ALLOWED_TELEGRAM_IDS,TELEGRAM_WEBHOOK_SECRET,CRON_SECRET --allow-read=.
